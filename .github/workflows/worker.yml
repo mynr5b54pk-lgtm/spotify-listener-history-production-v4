@@ -3,8 +3,7 @@ name: Spotify production worker v4
 on:
   workflow_dispatch:
  schedule:
-  - cron: "0 3 * * *"
-    timezone: "Asia/Tokyo"
+- cron: "0 18 * * *"
 concurrency:
   group: spotify-production-worker-v4
   cancel-in-progress: false
