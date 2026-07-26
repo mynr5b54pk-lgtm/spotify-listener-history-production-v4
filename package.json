@@ -1,0 +1,31 @@
+{
+  "name": "spotify-listener-history-production-v4",
+  "version": "4.0.0",
+  "private": true,
+  "description": "Production Spotify monthly-listener discovery, collection, API and operations dashboard",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "worker": "node src/worker/run.js",
+    "worker:discover": "node src/worker/discover.js",
+    "worker:scan": "node src/worker/scan.js",
+    "worker:collect": "node src/worker/collect.js",
+    "health": "node src/healthcheck.js",
+    "test": "node --test tests/*.test.js",
+    "install:browsers": "npx playwright install chromium"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "playwright": "^1.51.1",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "zod": "^3.24.2"
+  }
+}
