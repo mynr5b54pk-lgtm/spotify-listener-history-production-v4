@@ -2,9 +2,9 @@ name: Spotify production worker v4
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 */3 * * *"
-
+ schedule:
+  - cron: "0 3 * * *"
+    timezone: "Asia/Tokyo"
 concurrency:
   group: spotify-production-worker-v4
   cancel-in-progress: false
@@ -40,7 +40,7 @@ jobs:
 
           MAX_ARTIST_UPDATES_PER_RUN: "1300"
           MAX_PLAYLIST_SCANS_PER_RUN: "65"
-          MAX_DISCOVERY_QUERIES_PER_RUN: "13"
+        MAX_DISCOVERY_QUERIES_PER_RUN: "100"
 
           BROWSER_CONCURRENCY: "3"
           REQUEST_DELAY_MS: "2200"
