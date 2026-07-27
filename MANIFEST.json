@@ -1,34 +1,111 @@
-{
-  "name": "spotify-listener-history-production-v4",
-  "version": "4.0.0",
-  "files": [
-    ".env.example",
-    ".github/workflows/test.yml",
-    ".github/workflows/worker.yml",
-    ".gitignore",
-    "Dockerfile",
-    "README_JA.md",
-    "discovery-keywords.txt",
-    "docker-compose.yml",
-    "package.json",
-    "sql/001_production_v4.sql",
-    "src/api/admin.js",
-    "src/api/public.js",
-    "src/dashboard/public/app.js",
-    "src/dashboard/public/index.html",
-    "src/dashboard/public/styles.css",
-    "src/healthcheck.js",
-    "src/lib/config.js",
-    "src/lib/db.js",
-    "src/lib/logger.js",
-    "src/lib/spotify.js",
-    "src/lib/utils.js",
-    "src/server.js",
-    "src/worker/browser.js",
-    "src/worker/collect.js",
-    "src/worker/discover.js",
-    "src/worker/run.js",
-    "src/worker/scan.js",
-    "tests/spotify.test.js"
-  ]
+function parseCompactNumber(raw) {
+  if (!raw) return null;
+
+  const normalized = String(raw)
+    .replace(/\u00a0/g, " ")
+    .trim()
+    .toUpperCase();
+
+  const compact = normalized.match(/([\d.,]+)\s*([KMB])?(?![A-Z])/);
+  if (!compact) return null;
+
+  let number = compact[1].replace(/,/g, "");
+  const value = Number(number);
+  if (!Number.isFinite(value)) return null;
+
+  const multiplier = compact[2] === "K"
+    ? 1_000
+    : compact[2] === "M"
+      ? 1_000_000
+      : compact[2] === "B"
+        ? 1_000_000_000
+        : 1;
+
+  return Math.round(value * multiplier);
 }
+
+function extractMonthlyListeners(text) {
+  const lines = String(text)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const lower = lines[i].toLowerCase();
+
+    if (
+      lower.includes("monthly listeners") ||
+      lines[i].includes("月間リスナー")
+    ) {
+      const sameLine = parseCompactNumber(lines[i]);
+      if (sameLine !== null) return sameLine;
+
+      const previous = parseCompactNumber(lines[i - 1]);
+      if (previous !== null) return previous;
+
+      const next = parseCompactNumber(lines[i + 1]);
+      if (next !== null) return next;
+    }
+  }
+
+  return null;
+}
+
+async function extractPlaylistLinks(page) {
+  return page.locator('a[href*="/playlist/"]').evaluateAll((anchors) => {
+    const seen = new Set();
+    const output = [];
+
+    for (const anchor of anchors) {
+      const href = anchor.href || "";
+      const match = href.match(/\/playlist\/([A-Za-z0-9]+)/);
+      if (!match || seen.has(match[1])) continue;
+
+      seen.add(match[1]);
+      output.push({
+        spotifyId: match[1],
+        spotifyUrl: `https://open.spotify.com/playlist/${match[1]}`,
+        name: (anchor.textContent || "").trim() || null
+      });
+    }
+
+    return output;
+  });
+}
+
+async function extractArtistLinks(page) {
+  for (let i = 0; i < 16; i += 1) {
+    await page.mouse.wheel(0, 1800);
+    await page.waitForTimeout(350);
+  }
+
+  return page.locator('a[href*="/artist/"]').evaluateAll((anchors) => {
+    const seen = new Set();
+    const output = [];
+
+    for (const anchor of anchors) {
+      const href = anchor.href || "";
+      const match = href.match(/\/artist\/([A-Za-z0-9]+)/);
+      if (!match || seen.has(match[1])) continue;
+
+      seen.add(match[1]);
+      const image = anchor.querySelector("img");
+
+      output.push({
+        spotifyId: match[1],
+        spotifyUrl: `https://open.spotify.com/artist/${match[1]}`,
+        name: (anchor.textContent || "").trim() || `Spotify artist ${match[1]}`,
+        imageUrl: image?.src || null
+      });
+    }
+
+    return output;
+  });
+}
+
+module.exports = {
+  parseCompactNumber,
+  extractMonthlyListeners,
+  extractPlaylistLinks,
+  extractArtistLinks
+};

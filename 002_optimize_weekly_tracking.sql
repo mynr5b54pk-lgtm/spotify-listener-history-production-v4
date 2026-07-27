@@ -1,0 +1,62 @@
+name: Spotify production worker v4
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 */3 * * *"
+
+concurrency:
+  group: spotify-production-worker-v4
+  cancel-in-progress: false
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm install
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Run worker
+        env:
+          NODE_ENV: production
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          HEADLESS: "true"
+
+          MAX_ARTIST_UPDATES_PER_DAY: "10000"
+          MAX_PLAYLIST_SCANS_PER_DAY: "800"
+          MAX_DISCOVERY_QUERIES_PER_DAY: "160"
+
+          MAX_ARTIST_UPDATES_PER_RUN: "1300"
+          MAX_PLAYLIST_SCANS_PER_RUN: "100"
+          MAX_DISCOVERY_QUERIES_PER_RUN: "20"
+
+          BROWSER_CONCURRENCY: "3"
+          REQUEST_DELAY_MS: "2200"
+          REQUEST_JITTER_MS: "1200"
+          PAGE_TIMEOUT_MS: "45000"
+          PAGE_SETTLE_MS: "4500"
+          MAX_RETRIES: "3"
+          RETRY_BASE_DELAY_MS: "5000"
+          MAX_RUNTIME_MINUTES: "325"
+
+          MIN_MONTHLY_LISTENERS: "10000"
+          ACTIVE_RECHECK_HOURS: "168"
+          BELOW_THRESHOLD_RECHECK_DAYS: "30"
+          PLAYLIST_RESCAN_DAYS: "7"
+          MAX_FAILURES_BEFORE_PAUSE: "12"
+
+          WORKER_NAME: "spotify-production-worker-v4"
+          LOCK_TTL_MINUTES: "340"
+        run: npm run worker
