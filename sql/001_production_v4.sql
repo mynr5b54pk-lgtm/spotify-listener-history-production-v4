@@ -6,7 +6,6 @@ create table if not exists artists (
   id bigserial primary key,
   spotify_id text,
   name text not null,
-  aliases text[] not null default '{}',
   spotify_url text not null,
   image_url text,
   tracking_enabled boolean not null default true,
@@ -24,7 +23,6 @@ create table if not exists artists (
 
 alter table artists
   add column if not exists spotify_id text,
-  add column if not exists aliases text[] not null default '{}',
   add column if not exists image_url text,
   add column if not exists tracking_enabled boolean not null default true,
   add column if not exists discovery_status text not null default 'candidate',
@@ -47,8 +45,6 @@ create index if not exists artists_latest_idx
   on artists(monthly_listeners_latest desc nulls last);
 create index if not exists artists_name_trgm_fallback_idx
   on artists(lower(name));
-create index if not exists artists_aliases_gin_idx
-  on artists using gin(aliases);
 
 create table if not exists monthly_listener_history (
   id bigserial primary key,
@@ -311,11 +307,6 @@ as $$
       p_query is null
       or p_query = ''
       or lower(a.name) like '%' || lower(p_query) || '%'
-      or exists (
-        select 1
-        from unnest(coalesce(a.aliases, '{}')) as alias
-        where lower(alias) like '%' || lower(p_query) || '%'
-      )
     )
   order by a.monthly_listeners_latest desc nulls last, a.id
   limit greatest(1, least(p_limit, 100))
