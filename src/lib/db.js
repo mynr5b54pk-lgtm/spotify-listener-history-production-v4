@@ -340,9 +340,11 @@ async function getArtistById(id) {
     .select("id,spotify_id,name,spotify_url,image_url,monthly_listeners_latest,last_collected_at,discovery_status")
     .eq("id", id)
     .eq("discovery_status", "active")
-    .single();
-  const artist = ensure(data, error, "get artist");
-  return { ...artist, name: normalizeText(artist.name) };
+    .maybeSingle();
+
+  if (error) throw new Error(`get artist: ${error.message}`);
+  if (!data) return null;
+  return { ...data, name: normalizeText(data.name) };
 }
 
 async function getArtistHistory(id, limit = 365) {
