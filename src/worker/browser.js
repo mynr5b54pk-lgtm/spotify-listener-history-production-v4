@@ -10,7 +10,10 @@ async function launchBrowser() {
 
 async function newPage(browser) {
   const context = await browser.newContext({
-    locale: "ja-JP",
+    locale: "en-US",
+    extraHTTPHeaders: {
+      "Accept-Language": "en-US,en;q=0.9"
+    },
     viewport: { width: 1440, height: 1200 },
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
