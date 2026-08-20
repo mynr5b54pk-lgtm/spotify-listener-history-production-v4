@@ -49,6 +49,12 @@ Supabaseの SQL Editor で次のファイルを実行します。
 sql/001_production_v4.sql
 ```
 
+既存環境を公開向け設定へ更新する場合は、追加で次を1回実行します。
+
+```text
+sql/002_public_security.sql
+```
+
 ### 3. `.env` を作る
 
 `.env.example` を複製して `.env` に変更します。
@@ -65,6 +71,8 @@ HEADLESS=false
 - `sb_publishable_...` は使用しません。
 - SupabaseのSecret key `sb_secret_...` を使います。
 - `.env` はGitへ追加しません。
+- `SUPABASE_SERVICE_ROLE_KEY` と `ADMIN_TOKEN` はブラウザ側へ埋め込みません。
+- `ADMIN_TOKEN` は32文字以上のランダム値にします。
 
 ### 4. インストール
 

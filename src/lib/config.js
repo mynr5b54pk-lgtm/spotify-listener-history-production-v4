@@ -4,7 +4,7 @@ const { z } = require("zod");
 const schema = z.object({
   NODE_ENV: z.string().default("production"),
   PORT: z.coerce.number().int().positive().default(3000),
-  APP_BASE_URL: z.string().default("http://localhost:3000"),
+  APP_BASE_URL: z.string().url().default("http://localhost:3000"),
 
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
@@ -39,7 +39,14 @@ const schema = z.object({
   LOCK_TTL_MINUTES: z.coerce.number().int().positive().default(340),
 
   PUBLIC_API_PAGE_SIZE: z.coerce.number().int().positive().default(50),
-  PUBLIC_API_MAX_PAGE_SIZE: z.coerce.number().int().positive().default(100),
+  PUBLIC_API_MAX_PAGE_SIZE: z.coerce.number().int().positive().max(100).default(100),
+  PUBLIC_API_MAX_PAGE: z.coerce.number().int().positive().default(1000),
+  PUBLIC_API_MAX_QUERY_LENGTH: z.coerce.number().int().positive().default(100),
+  PUBLIC_API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  PUBLIC_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
+  ADMIN_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(20),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(1),
+  CORS_ALLOWED_ORIGINS: z.string().default(""),
   ADMIN_TOKEN: z.string().min(16)
 });
 
