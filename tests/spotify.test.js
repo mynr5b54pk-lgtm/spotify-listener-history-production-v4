@@ -2,7 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   parseCompactNumber,
-  extractMonthlyListeners
+  extractMonthlyListeners,
+  extractArtistName
 } = require("../src/lib/spotify");
 const { normalizeText } = require("../src/lib/utils");
 
@@ -35,4 +36,13 @@ test("normalize mojibake and Unicode width", () => {
   assert.equal(normalizeText("正常な日本語"), "正常な日本語");
   assert.equal(normalizeText("Rock â€“ Roll"), "Rock – Roll");
   assert.equal(normalizeText("A\u0000   B"), "A B");
+});
+
+test("extract artist name from the primary heading", async () => {
+  const page = {
+    locator: () => ({
+      first: () => ({ innerText: async () => "  Taylor Swift  " })
+    })
+  };
+  assert.equal(await extractArtistName(page), "Taylor Swift");
 });

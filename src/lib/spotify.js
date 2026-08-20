@@ -55,6 +55,12 @@ function extractMonthlyListeners(text) {
   return null;
 }
 
+async function extractArtistName(page) {
+  const heading = page.locator("h1").first();
+  const name = await heading.innerText().catch(() => "");
+  return name.trim() || null;
+}
+
 async function extractPlaylistLinks(page) {
   return page.locator('a[href*="/playlist/"]').evaluateAll((anchors) => {
     const seen = new Set();
@@ -110,6 +116,7 @@ async function extractArtistLinks(page) {
 module.exports = {
   parseCompactNumber,
   extractMonthlyListeners,
+  extractArtistName,
   extractPlaylistLinks,
   extractArtistLinks
 };
