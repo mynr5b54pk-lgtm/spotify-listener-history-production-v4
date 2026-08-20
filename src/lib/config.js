@@ -4,7 +4,7 @@ const { z } = require("zod");
 const schema = z.object({
   NODE_ENV: z.string().default("production"),
   PORT: z.coerce.number().int().positive().default(3000),
-  APP_BASE_URL: z.string().default("http://localhost:3000"),
+  APP_BASE_URL: z.string().url().default("http://localhost:3000"),
 
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
@@ -47,7 +47,7 @@ const schema = z.object({
   ADMIN_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(20),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(1),
   CORS_ALLOWED_ORIGINS: z.string().default(""),
-  ADMIN_TOKEN: z.string().min(32)
+  ADMIN_TOKEN: z.string().min(16)
 });
 
 const parsed = schema.safeParse(process.env);
