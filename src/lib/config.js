@@ -39,7 +39,12 @@ const schema = z.object({
   LOCK_TTL_MINUTES: z.coerce.number().int().positive().default(340),
 
   PUBLIC_API_PAGE_SIZE: z.coerce.number().int().positive().default(50),
-  PUBLIC_API_MAX_PAGE_SIZE: z.coerce.number().int().positive().default(100),
+  PUBLIC_API_MAX_PAGE_SIZE: z.coerce.number().int().positive().max(100).default(100),
+  PUBLIC_API_MAX_PAGE: z.coerce.number().int().positive().default(1000),
+  PUBLIC_API_MAX_QUERY_LENGTH: z.coerce.number().int().positive().default(100),
+  PUBLIC_API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  PUBLIC_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
+  CORS_ALLOWED_ORIGINS: z.string().default(""),
   ADMIN_TOKEN: z.string().min(16)
 });
 
