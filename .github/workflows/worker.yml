@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: '15 */3 * * *'
 
+permissions:
+  contents: read
+
 concurrency:
   group: spotify-production-worker-v4
   cancel-in-progress: false
@@ -17,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
