@@ -1,3 +1,36 @@
+function cleanArtistName(raw) {
+  if (!raw) return null;
+
+  const name = String(raw)
+    .replace(/\s*[|·-]\s*Spotify\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (
+    !name ||
+    name.length > 200 ||
+    /^spotify artist\b/i.test(name) ||
+    /monthly listeners|月間リスナー/i.test(name)
+  ) {
+    return null;
+  }
+
+  return name;
+}
+
+async function extractArtistName(page) {
+  const heading = await page.locator("h1").first().textContent().catch(() => null);
+  const headingName = cleanArtistName(heading);
+  if (headingName) return headingName;
+
+  const metadata = await page
+    .locator('meta[property="og:title"]')
+    .getAttribute("content")
+    .catch(() => null);
+
+  return cleanArtistName(metadata);
+}
+
 function parseCompactNumber(raw) {
   if (!raw) return null;
 
@@ -108,6 +141,8 @@ async function extractArtistLinks(page) {
 }
 
 module.exports = {
+  cleanArtistName,
+  extractArtistName,
   parseCompactNumber,
   extractMonthlyListeners,
   extractPlaylistLinks,
