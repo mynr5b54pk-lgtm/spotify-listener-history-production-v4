@@ -8,15 +8,34 @@ const {
 
 const router = express.Router();
 
+router.use((req, res, next) => {
+  res.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=60");
+  next();
+});
+
 router.get("/artists", async (req, res, next) => {
   try {
-    const page = Math.max(1, Number(req.query.page || 1));
+    const page = Number(req.query.page || 1);
     const requested = Number(req.query.limit || config.PUBLIC_API_PAGE_SIZE);
-    const limit = Math.min(
-      Math.max(1, requested),
-      config.PUBLIC_API_MAX_PAGE_SIZE
-    );
     const query = String(req.query.q || "").trim();
+
+    if (
+      !Number.isInteger(page) ||
+      page < 1 ||
+      page > config.PUBLIC_API_MAX_PAGE
+    ) {
+      return res.status(400).json({ error: "invalid page" });
+    }
+
+    if (!Number.isInteger(requested) || requested < 1) {
+      return res.status(400).json({ error: "invalid limit" });
+    }
+
+    if (query.length > config.PUBLIC_API_MAX_QUERY_LENGTH) {
+      return res.status(400).json({ error: "query too long" });
+    }
+
+    const limit = Math.min(requested, config.PUBLIC_API_MAX_PAGE_SIZE);
     const offset = (page - 1) * limit;
 
     const artists = await getPublicArtists({ query, limit, offset });
