@@ -6,7 +6,7 @@ const {
   saveArtistFailure,
   logJobError
 } = require("../lib/db");
-const { extractMonthlyListeners } = require("../lib/spotify");
+const { extractMonthlyListeners, extractArtistName } = require("../lib/spotify");
 const { launchBrowser, newPage } = require("./browser");
 const {
   mapLimit,
@@ -22,7 +22,7 @@ async function collectOne(browser, artist, deadline, runToken) {
   const { context, page } = await newPage(browser);
 
   try {
-    const listeners = await withRetry(async () => {
+    const result = await withRetry(async () => {
       await page.goto(artist.spotify_url, {
         waitUntil: "domcontentloaded",
         timeout: config.PAGE_TIMEOUT_MS
@@ -36,15 +36,18 @@ async function collectOne(browser, artist, deadline, runToken) {
         throw new Error("monthly listeners not found");
       }
 
-      return value;
+      return {
+        listeners: value,
+        canonicalName: await extractArtistName(page)
+      };
     }, {
       retries: config.MAX_RETRIES,
       baseDelayMs: config.RETRY_BASE_DELAY_MS,
       label: `artist:${artist.spotify_id || artist.id}`
     });
 
-    await saveArtistSuccess(artist, listeners);
-    logger.info({ artist: artist.name, listeners }, "artist collection complete");
+    await saveArtistSuccess(artist, result.listeners, result.canonicalName);
+    logger.info({ artist: result.canonicalName || artist.name, listeners: result.listeners }, "artist collection complete");
     return { completed: 1, failures: 0 };
   } catch (error) {
     await saveArtistFailure(artist, error.message);
