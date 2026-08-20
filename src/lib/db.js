@@ -339,6 +339,7 @@ async function getArtistById(id) {
     .from("artists")
     .select("id,spotify_id,name,spotify_url,image_url,monthly_listeners_latest,last_collected_at,discovery_status")
     .eq("id", id)
+    .eq("discovery_status", "active")
     .single();
   const artist = ensure(data, error, "get artist");
   return { ...artist, name: normalizeText(artist.name) };
