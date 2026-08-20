@@ -8,11 +8,6 @@ const {
 
 const router = express.Router();
 
-router.use((req, res, next) => {
-  res.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=60");
-  next();
-});
-
 router.get("/artists", async (req, res, next) => {
   try {
     const page = Number(req.query.page || 1);
@@ -40,6 +35,7 @@ router.get("/artists", async (req, res, next) => {
 
     const artists = await getPublicArtists({ query, limit, offset });
 
+    res.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=60");
     res.json({
       data: artists,
       pagination: {
@@ -61,8 +57,13 @@ router.get("/artists/:id", async (req, res, next) => {
     }
 
     const artist = await getArtistById(id);
-    const history = await getArtistHistory(id);
+    if (!artist) {
+      res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+      return res.status(404).json({ error: "artist not found" });
+    }
 
+    const history = await getArtistHistory(id);
+    res.set("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=60");
     res.json({ data: { ...artist, history } });
   } catch (error) {
     next(error);
