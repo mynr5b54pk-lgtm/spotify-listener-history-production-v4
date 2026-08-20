@@ -9,7 +9,7 @@ const publicApi = require("./api/public");
 const adminApi = require("./api/admin");
 
 const app = express();
-app.set("trust proxy", 1);
+app.set("trust proxy", config.TRUST_PROXY_HOPS);
 
 const allowedOrigins = new Set([
   config.APP_BASE_URL,
@@ -62,9 +62,25 @@ const apiRateLimiter = createRateLimiter({
   windowMs: config.PUBLIC_API_RATE_LIMIT_WINDOW_MS,
   maxRequests: config.PUBLIC_API_RATE_LIMIT_MAX_REQUESTS
 });
+const adminRateLimiter = createRateLimiter({
+  windowMs: config.PUBLIC_API_RATE_LIMIT_WINDOW_MS,
+  maxRequests: config.ADMIN_API_RATE_LIMIT_MAX_REQUESTS
+});
 
 app.use(helmet({
-  contentSecurityPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'none'"]
+    }
+  },
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors({
   origin(origin, callback) {
@@ -85,15 +101,17 @@ app.get("/healthz", (req, res) => {
 
 app.use("/api", apiRateLimiter);
 app.use("/api/v1", publicApi);
-app.use("/api/admin", adminApi);
+app.use("/api/admin", adminRateLimiter, adminApi);
 app.use(express.static(path.join(__dirname, "dashboard/public")));
 
 app.use((req, res) => {
+  res.set("Cache-Control", "no-store");
   res.status(404).json({ error: "not found" });
 });
 
 app.use((error, req, res, next) => {
   req.log?.error({ err: error }, "request failed");
+  res.set("Cache-Control", "no-store");
   res.status(500).json({
     error: "internal server error"
   });
