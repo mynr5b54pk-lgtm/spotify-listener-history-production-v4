@@ -33,4 +33,6 @@ test("normalize mojibake and Unicode width", () => {
   assert.equal(normalizeText("BeyoncÃ©"), "Beyoncé");
   assert.equal(normalizeText("ＡＢＣ　Band"), "ABC Band");
   assert.equal(normalizeText("正常な日本語"), "正常な日本語");
+  assert.equal(normalizeText("Rock â€“ Roll"), "Rock – Roll");
+  assert.equal(normalizeText("A\u0000   B"), "A B");
 });
