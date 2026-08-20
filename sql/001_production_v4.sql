@@ -1,6 +1,7 @@
 begin;
 
 create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
 
 create table if not exists artists (
   id bigserial primary key,
@@ -45,6 +46,8 @@ create index if not exists artists_latest_idx
   on artists(monthly_listeners_latest desc nulls last);
 create index if not exists artists_name_trgm_fallback_idx
   on artists(lower(name));
+create index if not exists artists_name_trgm_idx
+  on artists using gin(lower(name) gin_trgm_ops);
 
 create table if not exists monthly_listener_history (
   id bigserial primary key,
@@ -344,7 +347,19 @@ revoke all on function public.reserve_daily_quota(integer, integer, integer, int
 revoke all on function public.complete_daily_usage(integer, integer, integer)
   from public, anon, authenticated;
 revoke all on function public.public_artist_search(text, integer, integer)
-  from public;
+  from public, anon, authenticated;
+
+revoke all on table
+  public.artists,
+  public.monthly_listener_history,
+  public.playlists,
+  public.playlist_artists,
+  public.discovery_queries,
+  public.daily_usage,
+  public.worker_locks,
+  public.worker_runs,
+  public.job_errors
+  from anon, authenticated;
 
 grant execute on function public.acquire_worker_lock(text, uuid, integer)
   to service_role;
