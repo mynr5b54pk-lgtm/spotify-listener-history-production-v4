@@ -2,6 +2,32 @@ const crypto = require("crypto");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function countMatches(value, pattern) {
+  return (String(value).match(pattern) || []).length;
+}
+
+function normalizeText(value) {
+  if (value === null || value === undefined) return value;
+
+  let text = String(value).normalize("NFKC").replace(/\\u0000/g, "").trim();
+  if (!text) return text;
+
+  // Repair the common case where UTF-8 bytes were decoded as Latin-1/Windows-1252.
+  // Apply only when the repaired text clearly reduces mojibake markers.
+  if (/[ÃÂâð]/.test(text)) {
+    try {
+      const repaired = Buffer.from(text, "latin1").toString("utf8");
+      const before = countMatches(text, /[ÃÂâð�]/g);
+      const after = countMatches(repaired, /[ÃÂâð�]/g);
+      if (!repaired.includes("�") && after < before) text = repaired;
+    } catch {
+      // Keep the original when a safe repair is not possible.
+    }
+  }
+
+  return text.replace(/\\s+/g, " ").trim();
+}
+
 function randomDelay(baseMs, jitterMs) {
   return baseMs + Math.floor(Math.random() * Math.max(1, jitterMs + 1));
 }
@@ -69,6 +95,7 @@ function isPastDeadline(deadline) {
 
 module.exports = {
   sleep,
+  normalizeText,
   randomDelay,
   withRetry,
   mapLimit,
