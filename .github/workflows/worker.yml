@@ -43,7 +43,8 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           HEADLESS: 'true'
 
-          # Non-binding safety ceiling: 2,500 artists x 8 scheduled runs = 20,000/day.\n          MAX_ARTIST_UPDATES_PER_DAY: '50000'
+          # Non-binding safety ceiling: 2,500 artists x 8 scheduled runs = 20,000/day.
+          MAX_ARTIST_UPDATES_PER_DAY: '50000'
           MAX_PLAYLIST_SCANS_PER_DAY: '800'
           MAX_DISCOVERY_QUERIES_PER_DAY: '160'
 
