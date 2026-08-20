@@ -44,8 +44,10 @@ const schema = z.object({
   PUBLIC_API_MAX_QUERY_LENGTH: z.coerce.number().int().positive().default(100),
   PUBLIC_API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
   PUBLIC_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
+  ADMIN_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(20),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(1),
   CORS_ALLOWED_ORIGINS: z.string().default(""),
-  ADMIN_TOKEN: z.string().min(16)
+  ADMIN_TOKEN: z.string().min(32)
 });
 
 const parsed = schema.safeParse(process.env);
