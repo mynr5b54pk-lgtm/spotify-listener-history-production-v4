@@ -1,5 +1,6 @@
 const { createClient } = require("@supabase/supabase-js");
 const config = require("./config");
+const { normalizeText } = require("./utils");
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
   auth: {
@@ -161,8 +162,8 @@ async function upsertPlaylist(item, sourceQuery) {
     .upsert({
       spotify_id: item.spotifyId,
       spotify_url: item.spotifyUrl,
-      name: item.name,
-      source_query: sourceQuery,
+      name: normalizeText(item.name),
+      source_query: normalizeText(sourceQuery),
       updated_at: new Date().toISOString()
     }, { onConflict: "spotify_id" })
     .select("id")
@@ -189,7 +190,7 @@ async function upsertArtist(item) {
     .upsert({
       spotify_id: item.spotifyId,
       spotify_url: item.spotifyUrl,
-      name: item.name,
+      name: normalizeText(item.name),
       image_url: item.imageUrl,
       tracking_enabled: true,
       updated_at: new Date().toISOString()
@@ -327,7 +328,10 @@ async function getPublicArtists({ query, limit, offset }) {
     p_limit: limit,
     p_offset: offset
   });
-  return ensure(data, error, "public artist search") || [];
+  return (ensure(data, error, "public artist search") || []).map((artist) => ({
+    ...artist,
+    name: normalizeText(artist.name)
+  }));
 }
 
 async function getArtistById(id) {
@@ -336,7 +340,8 @@ async function getArtistById(id) {
     .select("id,spotify_id,name,spotify_url,image_url,monthly_listeners_latest,last_collected_at,discovery_status")
     .eq("id", id)
     .single();
-  return ensure(data, error, "get artist");
+  const artist = ensure(data, error, "get artist");
+  return { ...artist, name: normalizeText(artist.name) };
 }
 
 async function getArtistHistory(id, limit = 365) {

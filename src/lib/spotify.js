@@ -6,18 +6,22 @@ function parseCompactNumber(raw) {
     .trim()
     .toUpperCase();
 
-  const compact = normalized.match(/([\d.,]+)\s*([KMB])?/);
-  if (!compact) return null;
+  const numberMatch = normalized.match(/[\d]+(?:[.,][\d]+)*/);
+  if (!numberMatch) return null;
 
-  let number = compact[1].replace(/,/g, "");
-  const value = Number(number);
+  const value = Number(numberMatch[0].replace(/,/g, ""));
   if (!Number.isFinite(value)) return null;
 
-  const multiplier = compact[2] === "K"
+  // Only treat K/M/B as a suffix when it is a standalone unit.
+  // This prevents the M in "monthly listeners" from becoming "million".
+  const remainder = normalized.slice(numberMatch.index + numberMatch[0].length);
+  const suffix = remainder.match(/^\s*([KMB])(?=$|[\s),])/);
+
+  const multiplier = suffix?.[1] === "K"
     ? 1_000
-    : compact[2] === "M"
+    : suffix?.[1] === "M"
       ? 1_000_000
-      : compact[2] === "B"
+      : suffix?.[1] === "B"
         ? 1_000_000_000
         : 1;
 
