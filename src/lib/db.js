@@ -14,6 +14,26 @@ function ensure(data, error, label) {
   return data;
 }
 
+async function saveArtistAlias(artistId, alias) {
+  const normalized = normalizeText(alias);
+  if (!artistId || !normalized) return;
+
+  const { error } = await supabase
+    .from("site_artist_aliases")
+    .upsert({
+      artist_id: artistId,
+      alias: normalized
+    }, {
+      onConflict: "artist_id,alias",
+      ignoreDuplicates: true
+    });
+
+  // Alias storage must never stop listener collection.
+  if (error && error.code !== "23505") {
+    console.warn(`save artist alias failed: ${error.message}`);
+  }
+}
+
 async function acquireLock(lockToken) {
   const { data, error } = await supabase.rpc("acquire_worker_lock", {
     p_worker_name: config.WORKER_NAME,
@@ -185,12 +205,21 @@ async function getDuePlaylists(limit) {
 }
 
 async function upsertArtist(item) {
+  const incomingName = normalizeText(item.name);
+  const { data: existing, error: existingError } = await supabase
+    .from("artists")
+    .select("id,name")
+    .eq("spotify_url", item.spotifyUrl)
+    .maybeSingle();
+
+  ensure(null, existingError, "find existing artist");
+
   const { data, error } = await supabase
     .from("artists")
     .upsert({
       spotify_id: item.spotifyId,
       spotify_url: item.spotifyUrl,
-      name: normalizeText(item.name),
+      name: incomingName,
       image_url: item.imageUrl,
       tracking_enabled: true,
       updated_at: new Date().toISOString()
@@ -198,7 +227,13 @@ async function upsertArtist(item) {
     .select("id")
     .single();
 
-  return ensure(data, error, "upsert artist");
+  const artist = ensure(data, error, "upsert artist");
+
+  if (existing?.name && existing.name !== incomingName) {
+    await saveArtistAlias(artist.id, existing.name);
+  }
+
+  return artist;
 }
 
 async function linkPlaylistArtist(playlistId, artistId) {
@@ -262,7 +297,7 @@ async function getDueArtists(limit) {
   return ensure(data, error, "get artists") || [];
 }
 
-async function saveArtistSuccess(artist, listeners) {
+async function saveArtistSuccess(artist, listeners, canonicalName = null) {
   const now = new Date();
   const isActive = listeners >= config.MIN_MONTHLY_LISTENERS;
   const next = new Date(now);
@@ -284,9 +319,18 @@ async function saveArtistSuccess(artist, listeners) {
     throw new Error(`insert listener history: ${historyError.message}`);
   }
 
+  const normalizedCanonicalName = normalizeText(canonicalName);
+  const shouldRename = normalizedCanonicalName &&
+    normalizedCanonicalName !== normalizeText(artist.name);
+
+  if (shouldRename) {
+    await saveArtistAlias(artist.id, artist.name);
+  }
+
   const { error } = await supabase
     .from("artists")
     .update({
+      ...(shouldRename ? { name: normalizedCanonicalName } : {}),
       monthly_listeners_latest: listeners,
       last_collected_at: now.toISOString(),
       next_collect_at: next.toISOString(),
@@ -388,6 +432,7 @@ module.exports = {
   createRun,
   finishRun,
   logJobError,
+  saveArtistAlias,
   seedDiscoveryQueries,
   getDueDiscoveryQueries,
   markDiscoverySuccess,
