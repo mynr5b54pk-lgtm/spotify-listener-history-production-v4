@@ -1,10 +1,20 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  cleanArtistName,
   parseCompactNumber,
   extractMonthlyListeners
 } = require("../src/lib/spotify");
 const { normalizeText } = require("../src/lib/utils");
+
+
+test("clean canonical Spotify artist names", () => {
+  assert.equal(cleanArtistName("Bring Me The Horizon"), "Bring Me The Horizon");
+  assert.equal(cleanArtistName("Bring Me The Horizon | Spotify"), "Bring Me The Horizon");
+  assert.equal(cleanArtistName("  King   Gnu  "), "King Gnu");
+  assert.equal(cleanArtistName("1,234 monthly listeners"), null);
+  assert.equal(cleanArtistName("Spotify artist abc123"), null);
+});
 
 test("parse compact numbers", () => {
   assert.equal(parseCompactNumber("1.2M"), 1_200_000);
