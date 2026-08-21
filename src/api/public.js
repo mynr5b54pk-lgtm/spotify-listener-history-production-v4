@@ -1,5 +1,6 @@
 const express = require("express");
 const config = require("../lib/config");
+const { normalizeText } = require("../lib/utils");
 const {
   getPublicArtists,
   getArtistById,
@@ -12,7 +13,7 @@ router.get("/artists", async (req, res, next) => {
   try {
     const page = Number(req.query.page || 1);
     const requested = Number(req.query.limit || config.PUBLIC_API_PAGE_SIZE);
-    const query = String(req.query.q || "").trim();
+    const query = normalizeText(String(req.query.q || "")) || "";
 
     if (
       !Number.isInteger(page) ||
