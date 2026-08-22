@@ -22,10 +22,7 @@ async function saveArtistAlias(artistId, alias) {
 
   const { error } = await supabase
     .from("site_artist_aliases")
-    .upsert({
-      artist_id: artistId,
-      alias: normalized
-    }, {
+    .upsert({ artist_id: artistId, alias: normalized }, {
       onConflict: "artist_id,alias",
       ignoreDuplicates: true
     });
@@ -162,7 +159,13 @@ async function markDiscoveryFailure(query, message) {
 async function upsertPlaylist(item, sourceQuery) {
   const { data, error } = await supabase
     .from("playlists")
-    .upsert({ spotify_id: item.spotifyId, spotify_url: item.spotifyUrl, name: normalizeText(item.name), source_query: normalizeText(sourceQuery), updated_at: new Date().toISOString() }, { onConflict: "spotify_id" })
+    .upsert({
+      spotify_id: item.spotifyId,
+      spotify_url: item.spotifyUrl,
+      name: normalizeText(item.name),
+      source_query: normalizeText(sourceQuery),
+      updated_at: new Date().toISOString()
+    }, { onConflict: "spotify_id" })
     .select("id")
     .single();
   return ensure(data, error, "upsert playlist");
@@ -191,7 +194,14 @@ async function upsertArtist(item) {
 
   const { data, error } = await supabase
     .from("artists")
-    .upsert({ spotify_id: item.spotifyId, spotify_url: item.spotifyUrl, name: incomingName, image_url: item.imageUrl, tracking_enabled: true, updated_at: new Date().toISOString() }, { onConflict: "spotify_url" })
+    .upsert({
+      spotify_id: item.spotifyId,
+      spotify_url: item.spotifyUrl,
+      name: incomingName,
+      image_url: item.imageUrl,
+      tracking_enabled: true,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "spotify_url" })
     .select("id")
     .single();
   const artist = ensure(data, error, "upsert artist");
@@ -227,9 +237,8 @@ async function savePlaylistFailure(playlist, message) {
   ensure(null, error, "save playlist failure");
 }
 
-async function getDueArtists(limit) {
+async function fetchDueArtistsByStatuses(statuses, limit, deadline) {
   if (limit <= 0) return [];
-  const deadline = new Date().toISOString();
   const artists = [];
 
   for (let offset = 0; offset < limit; offset += POSTGREST_PAGE_SIZE) {
@@ -238,6 +247,7 @@ async function getDueArtists(limit) {
       .from("artists")
       .select("*")
       .eq("tracking_enabled", true)
+      .in("discovery_status", statuses)
       .lte("next_collect_at", deadline)
       .order("next_collect_at", { ascending: true })
       .order("id", { ascending: true })
@@ -249,6 +259,20 @@ async function getDueArtists(limit) {
   }
 
   return artists;
+}
+
+async function getDueArtists(limit) {
+  if (limit <= 0) return [];
+  const deadline = new Date().toISOString();
+
+  // Existing public artists and retrying failures must never be starved by the
+  // discovery backlog. Fill remaining capacity with new/below-threshold items.
+  const tracked = await fetchDueArtistsByStatuses(["active", "error"], limit, deadline);
+  if (tracked.length >= limit) return tracked;
+
+  const remaining = limit - tracked.length;
+  const discovery = await fetchDueArtistsByStatuses(["candidate", "below_threshold"], remaining, deadline);
+  return [...tracked, ...discovery];
 }
 
 async function saveArtistSuccess(artist, listeners, canonicalName = null) {
@@ -269,7 +293,16 @@ async function saveArtistSuccess(artist, listeners, canonicalName = null) {
 
   const { error } = await supabase
     .from("artists")
-    .update({ ...(shouldRename ? { name: normalizedCanonicalName } : {}), monthly_listeners_latest: listeners, last_collected_at: now.toISOString(), next_collect_at: next.toISOString(), discovery_status: isActive ? "active" : "below_threshold", failure_count: 0, last_error: null, updated_at: now.toISOString() })
+    .update({
+      ...(shouldRename ? { name: normalizedCanonicalName } : {}),
+      monthly_listeners_latest: listeners,
+      last_collected_at: now.toISOString(),
+      next_collect_at: next.toISOString(),
+      discovery_status: isActive ? "active" : "below_threshold",
+      failure_count: 0,
+      last_error: null,
+      updated_at: now.toISOString()
+    })
     .eq("id", artist.id);
   ensure(null, error, "save artist success");
 }
