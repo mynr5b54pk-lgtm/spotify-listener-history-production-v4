@@ -3,24 +3,22 @@ const logger = require("../lib/logger");
 const {
   acquireLock,
   releaseLock,
-  reserveQuota,
-  completeUsage,
   createRun,
   finishRun
 } = require("../lib/db");
+const { reserveRunQuota, finalizeRunQuota } = require("../lib/quota");
 const { discoverPlaylists } = require("./discover");
 const { scanPlaylists } = require("./scan");
 const { collectArtists } = require("./collect");
-const {
-  uuid,
-  deadlineFromMinutes
-} = require("../lib/utils");
+const { uuid, deadlineFromMinutes } = require("../lib/utils");
 
 (async () => {
   const started = Date.now();
   const runToken = uuid();
   let runId = null;
   let lockAcquired = false;
+  let quota = null;
+  let quotaFinalized = false;
 
   const stats = {
     artistUpdatesCompleted: 0,
@@ -33,6 +31,21 @@ const {
     notes: null
   };
 
+  const usage = {
+    artistAttempted: 0,
+    playlistAttempted: 0,
+    discoveryAttempted: 0,
+    artistCompleted: 0,
+    playlistCompleted: 0,
+    discoveryCompleted: 0
+  };
+
+  async function finalizeQuotaOnce() {
+    if (!quota || quotaFinalized) return;
+    await finalizeRunQuota(quota, usage);
+    quotaFinalized = true;
+  }
+
   try {
     lockAcquired = await acquireLock(runToken);
 
@@ -41,7 +54,7 @@ const {
       return;
     }
 
-    const quota = await reserveQuota();
+    quota = await reserveRunQuota();
     runId = await createRun(runToken, quota);
     const deadline = deadlineFromMinutes(config.MAX_RUNTIME_MINUTES);
 
@@ -52,7 +65,8 @@ const {
       deadline,
       runToken
     );
-
+    usage.discoveryAttempted = discovery.completed + discovery.failures;
+    usage.discoveryCompleted = discovery.completed;
     stats.discoveryQueriesCompleted = discovery.completed;
     stats.discoveredPlaylists = discovery.discoveredPlaylists;
     stats.failedJobs += discovery.failures;
@@ -62,7 +76,8 @@ const {
       deadline,
       runToken
     );
-
+    usage.playlistAttempted = scan.completed + scan.failures;
+    usage.playlistCompleted = scan.completed;
     stats.playlistScansCompleted = scan.completed;
     stats.discoveredArtists = scan.discoveredArtists;
     stats.failedJobs += scan.failures;
@@ -72,12 +87,13 @@ const {
       deadline,
       runToken
     );
-
+    usage.artistAttempted = collect.completed + collect.failures;
+    usage.artistCompleted = collect.completed;
     stats.artistUpdatesCompleted = collect.completed;
     stats.failedJobs += collect.failures;
     stats.durationSeconds = Math.round((Date.now() - started) / 1000);
 
-    await completeUsage(stats);
+    await finalizeQuotaOnce();
 
     const status =
       stats.failedJobs === 0
@@ -90,11 +106,17 @@ const {
           : "failed";
 
     await finishRun(runId, stats, status);
-    logger.info({ stats, status }, "worker finished");
+    logger.info({ stats, usage, status }, "worker finished");
   } catch (error) {
     stats.durationSeconds = Math.round((Date.now() - started) / 1000);
     stats.notes = `fatal: ${error.message}`;
     logger.error({ err: error }, "worker fatal error");
+
+    try {
+      await finalizeQuotaOnce();
+    } catch (quotaError) {
+      logger.error({ err: quotaError }, "failed to finalize run quota");
+    }
 
     if (runId) {
       try {
