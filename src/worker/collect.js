@@ -16,6 +16,14 @@ const {
   isPastDeadline
 } = require("../lib/utils");
 
+function assertArtistPage(page, artist) {
+  const match = page.url().match(/\/artist\/([A-Za-z0-9]+)/);
+  const expected = artist.spotify_id || artist.spotify_url?.match(/\/artist\/([A-Za-z0-9]+)/)?.[1];
+  if (!match || (expected && match[1] !== expected)) {
+    throw new Error(`unexpected artist page: ${page.url()}`);
+  }
+}
+
 async function collectOne(browser, artist, deadline, runToken) {
   if (isPastDeadline(deadline)) return { skipped: true };
 
@@ -28,6 +36,7 @@ async function collectOne(browser, artist, deadline, runToken) {
         timeout: config.PAGE_TIMEOUT_MS
       });
       await page.waitForTimeout(config.PAGE_SETTLE_MS);
+      assertArtistPage(page, artist);
 
       const text = await page.locator("body").innerText();
       const value = extractMonthlyListeners(text);
