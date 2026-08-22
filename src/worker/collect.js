@@ -24,6 +24,26 @@ function assertArtistPage(page, artist) {
   }
 }
 
+async function readArtistPage(page, artist) {
+  assertArtistPage(page, artist);
+  const text = await page.locator("body").innerText();
+  const listeners = extractMonthlyListeners(text);
+  if (listeners === null || listeners < 0 || listeners > 1_000_000_000) {
+    throw new Error("monthly listeners not found or out of range");
+  }
+  return {
+    listeners,
+    canonicalName: await extractArtistName(page)
+  };
+}
+
+function isExtremeChange(previous, current) {
+  const before = Number(previous);
+  const after = Number(current);
+  if (!Number.isFinite(before) || before <= 0 || !Number.isFinite(after) || after <= 0) return false;
+  return after / before > 3 || before / after > 3;
+}
+
 async function collectOne(browser, artist, deadline, runToken) {
   if (isPastDeadline(deadline)) return { skipped: true };
 
@@ -36,19 +56,22 @@ async function collectOne(browser, artist, deadline, runToken) {
         timeout: config.PAGE_TIMEOUT_MS
       });
       await page.waitForTimeout(config.PAGE_SETTLE_MS);
-      assertArtistPage(page, artist);
 
-      const text = await page.locator("body").innerText();
-      const value = extractMonthlyListeners(text);
+      const first = await readArtistPage(page, artist);
 
-      if (value === null) {
-        throw new Error("monthly listeners not found");
+      if (isExtremeChange(artist.monthly_listeners_latest, first.listeners)) {
+        await page.reload({ waitUntil: "domcontentloaded", timeout: config.PAGE_TIMEOUT_MS });
+        await page.waitForTimeout(config.PAGE_SETTLE_MS);
+        const confirmation = await readArtistPage(page, artist);
+        const difference = Math.abs(confirmation.listeners - first.listeners);
+        const tolerance = Math.max(10, Math.round(first.listeners * 0.01));
+        if (difference > tolerance) {
+          throw new Error(`unconfirmed listener jump: ${first.listeners} -> ${confirmation.listeners}`);
+        }
+        return confirmation;
       }
 
-      return {
-        listeners: value,
-        canonicalName: await extractArtistName(page)
-      };
+      return first;
     }, {
       retries: config.MAX_RETRIES,
       baseDelayMs: config.RETRY_BASE_DELAY_MS,
