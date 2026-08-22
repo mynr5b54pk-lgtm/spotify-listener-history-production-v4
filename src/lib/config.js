@@ -33,7 +33,6 @@ const schema = z.object({
   ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(24),
   BELOW_THRESHOLD_RECHECK_DAYS: z.coerce.number().int().positive().default(30),
   PLAYLIST_RESCAN_DAYS: z.coerce.number().int().positive().default(7),
-  MAX_FAILURES_BEFORE_PAUSE: z.coerce.number().int().positive().default(12),
 
   WORKER_NAME: z.string().default("spotify-production-worker-v4"),
   LOCK_TTL_MINUTES: z.coerce.number().int().positive().default(340),

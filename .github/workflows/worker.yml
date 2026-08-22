@@ -43,7 +43,7 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           HEADLESS: 'true'
 
-          # Non-binding safety ceiling: 2,500 artists x 8 scheduled runs = 20,000/day.
+          # 2,500 artists x 8 scheduled runs = up to 20,000 collection attempts/day.
           MAX_ARTIST_UPDATES_PER_DAY: '50000'
           MAX_PLAYLIST_SCANS_PER_DAY: '800'
           MAX_DISCOVERY_QUERIES_PER_DAY: '160'
@@ -62,10 +62,9 @@ jobs:
           MAX_RUNTIME_MINUTES: '325'
 
           MIN_MONTHLY_LISTENERS: '10000'
-          ACTIVE_RECHECK_HOURS: '168'
+          ACTIVE_RECHECK_HOURS: '24'
           BELOW_THRESHOLD_RECHECK_DAYS: '30'
           PLAYLIST_RESCAN_DAYS: '7'
-          MAX_FAILURES_BEFORE_PAUSE: '12'
 
           WORKER_NAME: spotify-production-worker-v4
           LOCK_TTL_MINUTES: '340'
