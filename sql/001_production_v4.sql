@@ -59,8 +59,8 @@ create table if not exists monthly_listener_history (
 
 create index if not exists listener_history_artist_time_idx
   on monthly_listener_history(artist_id, collected_at desc);
-create unique index if not exists listener_history_artist_minute_unique
-  on monthly_listener_history(artist_id, date_trunc('month', collected_at AT TIME ZONE 'UTC'));
+create unique index if not exists listener_history_artist_day_unique
+  on monthly_listener_history(artist_id, ((collected_at at time zone 'UTC')::date));
 
 create table if not exists playlists (
   id bigserial primary key,
@@ -89,6 +89,8 @@ create table if not exists playlist_artists (
   last_seen_at timestamptz not null default now(),
   primary key (playlist_id, artist_id)
 );
+create index if not exists playlist_artists_artist_id_idx
+  on playlist_artists(artist_id);
 
 create table if not exists discovery_queries (
   id bigserial primary key,
@@ -175,38 +177,26 @@ declare
   acquired boolean := false;
 begin
   insert into worker_locks(worker_name, lock_token, locked_until, updated_at)
-  values (
-    p_worker_name,
-    p_lock_token,
-    now() + make_interval(mins => p_ttl_minutes),
-    now()
-  )
+  values (p_worker_name, p_lock_token, now() + make_interval(mins => p_ttl_minutes), now())
   on conflict (worker_name) do update
     set lock_token = excluded.lock_token,
         locked_until = excluded.locked_until,
         updated_at = now()
     where worker_locks.locked_until < now();
 
-  select lock_token = p_lock_token
-  into acquired
-  from worker_locks
-  where worker_name = p_worker_name;
-
+  select lock_token = p_lock_token into acquired
+  from worker_locks where worker_name = p_worker_name;
   return coalesce(acquired, false);
 end;
 $$;
 
-create or replace function release_worker_lock(
-  p_worker_name text,
-  p_lock_token uuid
-)
+create or replace function release_worker_lock(p_worker_name text, p_lock_token uuid)
 returns void
 language sql
 security definer
 as $$
   delete from worker_locks
-  where worker_name = p_worker_name
-    and lock_token = p_lock_token;
+  where worker_name = p_worker_name and lock_token = p_lock_token;
 $$;
 
 create or replace function reserve_daily_quota(
@@ -217,38 +207,20 @@ create or replace function reserve_daily_quota(
   p_playlist_daily_max integer,
   p_discovery_daily_max integer
 )
-returns table (
-  artist_allowed integer,
-  playlist_allowed integer,
-  discovery_allowed integer
-)
+returns table (artist_allowed integer, playlist_allowed integer, discovery_allowed integer)
 language plpgsql
 security definer
 as $$
 declare
   u daily_usage%rowtype;
 begin
-  insert into daily_usage(usage_date)
-  values (current_date)
+  insert into daily_usage(usage_date) values (current_date)
   on conflict (usage_date) do nothing;
 
-  select * into u
-  from daily_usage
-  where usage_date = current_date
-  for update;
-
-  artist_allowed := greatest(
-    0,
-    least(p_artist_requested, p_artist_daily_max - u.artist_updates_reserved)
-  );
-  playlist_allowed := greatest(
-    0,
-    least(p_playlist_requested, p_playlist_daily_max - u.playlist_scans_reserved)
-  );
-  discovery_allowed := greatest(
-    0,
-    least(p_discovery_requested, p_discovery_daily_max - u.discovery_queries_reserved)
-  );
+  select * into u from daily_usage where usage_date = current_date for update;
+  artist_allowed := greatest(0, least(p_artist_requested, p_artist_daily_max - u.artist_updates_reserved));
+  playlist_allowed := greatest(0, least(p_playlist_requested, p_playlist_daily_max - u.playlist_scans_reserved));
+  discovery_allowed := greatest(0, least(p_discovery_requested, p_discovery_daily_max - u.discovery_queries_reserved));
 
   update daily_usage
   set artist_updates_reserved = artist_updates_reserved + artist_allowed,
@@ -256,7 +228,6 @@ begin
       discovery_queries_reserved = discovery_queries_reserved + discovery_allowed,
       updated_at = now()
   where usage_date = current_date;
-
   return next;
 end;
 $$;
@@ -296,21 +267,11 @@ language sql
 stable
 security definer
 as $$
-  select
-    a.id,
-    a.spotify_id,
-    a.name,
-    a.spotify_url,
-    a.image_url,
-    a.monthly_listeners_latest,
-    a.last_collected_at
+  select a.id, a.spotify_id, a.name, a.spotify_url, a.image_url,
+         a.monthly_listeners_latest, a.last_collected_at
   from artists a
   where a.discovery_status = 'active'
-    and (
-      p_query is null
-      or p_query = ''
-      or lower(a.name) like '%' || lower(p_query) || '%'
-    )
+    and (p_query is null or p_query = '' or lower(a.name) like '%' || lower(p_query) || '%')
   order by a.monthly_listeners_latest desc nulls last, a.id
   limit greatest(1, least(p_limit, 100))
   offset greatest(0, p_offset);
@@ -326,28 +287,17 @@ alter table worker_locks enable row level security;
 alter table worker_runs enable row level security;
 alter table job_errors enable row level security;
 
--- Public launch permissions: expose only the read-only search RPC.
-alter function public.acquire_worker_lock(text, uuid, integer)
-  set search_path = public, pg_temp;
-alter function public.release_worker_lock(text, uuid)
-  set search_path = public, pg_temp;
-alter function public.reserve_daily_quota(integer, integer, integer, integer, integer, integer)
-  set search_path = public, pg_temp;
-alter function public.complete_daily_usage(integer, integer, integer)
-  set search_path = public, pg_temp;
-alter function public.public_artist_search(text, integer, integer)
-  set search_path = public, pg_temp;
+alter function public.acquire_worker_lock(text, uuid, integer) set search_path = public, pg_temp;
+alter function public.release_worker_lock(text, uuid) set search_path = public, pg_temp;
+alter function public.reserve_daily_quota(integer, integer, integer, integer, integer, integer) set search_path = public, pg_temp;
+alter function public.complete_daily_usage(integer, integer, integer) set search_path = public, pg_temp;
+alter function public.public_artist_search(text, integer, integer) set search_path = public, pg_temp;
 
-revoke all on function public.acquire_worker_lock(text, uuid, integer)
-  from public, anon, authenticated;
-revoke all on function public.release_worker_lock(text, uuid)
-  from public, anon, authenticated;
-revoke all on function public.reserve_daily_quota(integer, integer, integer, integer, integer, integer)
-  from public, anon, authenticated;
-revoke all on function public.complete_daily_usage(integer, integer, integer)
-  from public, anon, authenticated;
-revoke all on function public.public_artist_search(text, integer, integer)
-  from public, anon, authenticated;
+revoke all on function public.acquire_worker_lock(text, uuid, integer) from public, anon, authenticated;
+revoke all on function public.release_worker_lock(text, uuid) from public, anon, authenticated;
+revoke all on function public.reserve_daily_quota(integer, integer, integer, integer, integer, integer) from public, anon, authenticated;
+revoke all on function public.complete_daily_usage(integer, integer, integer) from public, anon, authenticated;
+revoke all on function public.public_artist_search(text, integer, integer) from public, anon, authenticated;
 
 revoke all on table
   public.artists,
@@ -361,15 +311,10 @@ revoke all on table
   public.job_errors
   from anon, authenticated;
 
-grant execute on function public.acquire_worker_lock(text, uuid, integer)
-  to service_role;
-grant execute on function public.release_worker_lock(text, uuid)
-  to service_role;
-grant execute on function public.reserve_daily_quota(integer, integer, integer, integer, integer, integer)
-  to service_role;
-grant execute on function public.complete_daily_usage(integer, integer, integer)
-  to service_role;
-grant execute on function public.public_artist_search(text, integer, integer)
-  to anon, authenticated, service_role;
+grant execute on function public.acquire_worker_lock(text, uuid, integer) to service_role;
+grant execute on function public.release_worker_lock(text, uuid) to service_role;
+grant execute on function public.reserve_daily_quota(integer, integer, integer, integer, integer, integer) to service_role;
+grant execute on function public.complete_daily_usage(integer, integer, integer) to service_role;
+grant execute on function public.public_artist_search(text, integer, integer) to anon, authenticated, service_role;
 
 commit;
