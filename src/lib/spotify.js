@@ -6,19 +6,10 @@ function cleanArtistName(raw) {
     .replace(/\s+/g, " ")
     .trim();
 
-  const shellLabels = new Set([
-    "your library",
-    "home",
-    "search",
-    "spotify",
-    "liked songs",
-    "create playlist"
-  ]);
-
   if (
     !name ||
     name.length > 200 ||
-    shellLabels.has(name.toLowerCase()) ||
+    name.toLowerCase() === "your library" ||
     /^spotify artist\b/i.test(name) ||
     /monthly listeners|月間リスナー/i.test(name)
   ) {
@@ -29,8 +20,6 @@ function cleanArtistName(raw) {
 }
 
 async function extractArtistName(page) {
-  // Spotify's first h1 can be shell UI such as "Your Library". The Open Graph
-  // title is tied to the loaded artist page and is therefore the safer source.
   const metadata = await page
     .locator('meta[property="og:title"]')
     .getAttribute("content")
@@ -78,101 +67,60 @@ function extractMonthlyListeners(text) {
 
   for (let i = 0; i < lines.length; i += 1) {
     const lower = lines[i].toLowerCase();
-
-    if (
-      lower.includes("monthly listeners") ||
-      lines[i].includes("月間リスナー")
-    ) {
+    if (lower.includes("monthly listeners") || lines[i].includes("月間リスナー")) {
       const sameLine = parseCompactNumber(lines[i]);
       if (sameLine !== null) return sameLine;
-
       const previous = parseCompactNumber(lines[i - 1]);
       if (previous !== null) return previous;
-
       const next = parseCompactNumber(lines[i + 1]);
       if (next !== null) return next;
     }
   }
-
   return null;
 }
 
 async function collectAnchorSnapshots(page, selector, options = {}) {
-  const {
-    maxRounds = 60,
-    stableRounds = 4,
-    wheelY = 1800,
-    waitMs = 350
-  } = options;
-
+  const { maxRounds = 60, stableRounds = 4, wheelY = 1800, waitMs = 350 } = options;
   const snapshots = new Map();
   let unchangedRounds = 0;
 
   for (let round = 0; round < maxRounds; round += 1) {
-    const visible = await page.locator(selector).evaluateAll((anchors) =>
-      anchors.map((anchor) => ({
-        href: anchor.href || "",
-        text: (anchor.textContent || "").trim(),
-        imageUrl: anchor.querySelector("img")?.src || null
-      }))
-    );
-
+    const visible = await page.locator(selector).evaluateAll((anchors) => anchors.map((anchor) => ({
+      href: anchor.href || "",
+      text: (anchor.textContent || "").trim(),
+      imageUrl: anchor.querySelector("img")?.src || null
+    })));
     const before = snapshots.size;
-    for (const item of visible) {
-      if (item.href) snapshots.set(item.href, item);
-    }
-
+    for (const item of visible) if (item.href) snapshots.set(item.href, item);
     if (snapshots.size === before) unchangedRounds += 1;
     else unchangedRounds = 0;
-
     if (unchangedRounds >= stableRounds) break;
-
     await page.mouse.wheel(0, wheelY);
     await page.waitForTimeout(waitMs);
   }
-
   return [...snapshots.values()];
 }
 
 async function extractPlaylistLinks(page) {
-  const anchors = await collectAnchorSnapshots(
-    page,
-    'a[href*="/playlist/"]',
-    { maxRounds: 30, stableRounds: 3 }
-  );
-
+  const anchors = await collectAnchorSnapshots(page, 'a[href*="/playlist/"]', { maxRounds: 30, stableRounds: 3 });
   const seen = new Set();
   const output = [];
-
   for (const anchor of anchors) {
     const match = anchor.href.match(/\/playlist\/([A-Za-z0-9]+)/);
     if (!match || seen.has(match[1])) continue;
-
     seen.add(match[1]);
-    output.push({
-      spotifyId: match[1],
-      spotifyUrl: `https://open.spotify.com/playlist/${match[1]}`,
-      name: anchor.text || null
-    });
+    output.push({ spotifyId: match[1], spotifyUrl: `https://open.spotify.com/playlist/${match[1]}`, name: anchor.text || null });
   }
-
   return output;
 }
 
 async function extractArtistLinks(page) {
-  const anchors = await collectAnchorSnapshots(
-    page,
-    'a[href*="/artist/"]',
-    { maxRounds: 80, stableRounds: 5 }
-  );
-
+  const anchors = await collectAnchorSnapshots(page, 'a[href*="/artist/"]', { maxRounds: 80, stableRounds: 5 });
   const seen = new Set();
   const output = [];
-
   for (const anchor of anchors) {
     const match = anchor.href.match(/\/artist\/([A-Za-z0-9]+)/);
     if (!match || seen.has(match[1])) continue;
-
     seen.add(match[1]);
     output.push({
       spotifyId: match[1],
@@ -181,15 +129,7 @@ async function extractArtistLinks(page) {
       imageUrl: anchor.imageUrl
     });
   }
-
   return output;
 }
 
-module.exports = {
-  cleanArtistName,
-  extractArtistName,
-  parseCompactNumber,
-  extractMonthlyListeners,
-  extractPlaylistLinks,
-  extractArtistLinks
-};
+module.exports = { cleanArtistName, extractArtistName, parseCompactNumber, extractMonthlyListeners, extractPlaylistLinks, extractArtistLinks };
