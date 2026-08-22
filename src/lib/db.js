@@ -3,10 +3,7 @@ const config = require("./config");
 const { normalizeText } = require("./utils");
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false
-  }
+  auth: { persistSession: false, autoRefreshToken: false }
 });
 
 const POSTGREST_PAGE_SIZE = 1000;
@@ -19,17 +16,10 @@ function ensure(data, error, label) {
 async function saveArtistAlias(artistId, alias) {
   const normalized = normalizeText(alias);
   if (!artistId || !normalized) return;
-
   const { error } = await supabase
     .from("site_artist_aliases")
-    .upsert({ artist_id: artistId, alias: normalized }, {
-      onConflict: "artist_id,alias",
-      ignoreDuplicates: true
-    });
-
-  if (error && error.code !== "23505") {
-    console.warn(`save artist alias failed: ${error.message}`);
-  }
+    .upsert({ artist_id: artistId, alias: normalized }, { onConflict: "artist_id,alias", ignoreDuplicates: true });
+  if (error && error.code !== "23505") console.warn(`save artist alias failed: ${error.message}`);
 }
 
 async function acquireLock(lockToken) {
@@ -240,7 +230,6 @@ async function savePlaylistFailure(playlist, message) {
 async function fetchDueArtistsByStatuses(statuses, limit, deadline) {
   if (limit <= 0) return [];
   const artists = [];
-
   for (let offset = 0; offset < limit; offset += POSTGREST_PAGE_SIZE) {
     const batchSize = Math.min(POSTGREST_PAGE_SIZE, limit - offset);
     const { data, error } = await supabase
@@ -252,27 +241,44 @@ async function fetchDueArtistsByStatuses(statuses, limit, deadline) {
       .order("next_collect_at", { ascending: true })
       .order("id", { ascending: true })
       .range(offset, offset + batchSize - 1);
-
     const batch = ensure(data, error, "get artists") || [];
     artists.push(...batch);
     if (batch.length < batchSize) break;
   }
-
   return artists;
 }
 
 async function getDueArtists(limit) {
   if (limit <= 0) return [];
   const deadline = new Date().toISOString();
-
-  // Existing public artists and retrying failures must never be starved by the
-  // discovery backlog. Fill remaining capacity with new/below-threshold items.
   const tracked = await fetchDueArtistsByStatuses(["active", "error"], limit, deadline);
   if (tracked.length >= limit) return tracked;
-
   const remaining = limit - tracked.length;
   const discovery = await fetchDueArtistsByStatuses(["candidate", "below_threshold"], remaining, deadline);
   return [...tracked, ...discovery];
+}
+
+async function saveDailyHistory(artistId, listeners, now) {
+  const { error: insertError } = await supabase
+    .from("monthly_listener_history")
+    .insert({ artist_id: artistId, monthly_listeners: listeners, collected_at: now.toISOString() });
+
+  if (!insertError) return;
+  if (insertError.code !== "23505") throw new Error(`insert listener history: ${insertError.message}`);
+
+  // A manual rerun or retry can collect an artist more than once in one UTC day.
+  // Keep one point/day, but make that point the latest successful observation.
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const dayEnd = new Date(dayStart);
+  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+  const { error: updateError } = await supabase
+    .from("monthly_listener_history")
+    .update({ monthly_listeners: listeners, collected_at: now.toISOString() })
+    .eq("artist_id", artistId)
+    .gte("collected_at", dayStart.toISOString())
+    .lt("collected_at", dayEnd.toISOString());
+  ensure(null, updateError, "update daily listener history");
 }
 
 async function saveArtistSuccess(artist, listeners, canonicalName = null) {
@@ -282,10 +288,7 @@ async function saveArtistSuccess(artist, listeners, canonicalName = null) {
   if (isActive) next.setUTCHours(next.getUTCHours() + config.ACTIVE_RECHECK_HOURS);
   else next.setUTCDate(next.getUTCDate() + config.BELOW_THRESHOLD_RECHECK_DAYS);
 
-  const { error: historyError } = await supabase
-    .from("monthly_listener_history")
-    .insert({ artist_id: artist.id, monthly_listeners: listeners });
-  if (historyError && historyError.code !== "23505") throw new Error(`insert listener history: ${historyError.message}`);
+  await saveDailyHistory(artist.id, listeners, now);
 
   const normalizedCanonicalName = normalizeText(canonicalName);
   const shouldRename = normalizedCanonicalName && normalizedCanonicalName !== normalizeText(artist.name);
@@ -311,9 +314,24 @@ async function saveArtistFailure(artist, message) {
   const failures = Number(artist.failure_count || 0) + 1;
   const next = new Date();
   next.setUTCHours(next.getUTCHours() + Math.min(72, 2 ** Math.min(failures, 6)));
+
+  // A transient scrape failure must not make a previously valid public artist
+  // disappear from search/detail pages. Only never-successful candidates use
+  // the error state while waiting for a retry.
+  const status = ["active", "below_threshold"].includes(artist.discovery_status)
+    ? artist.discovery_status
+    : "error";
+
   const { error } = await supabase
     .from("artists")
-    .update({ tracking_enabled: true, discovery_status: "error", failure_count: failures, last_error: message.slice(0, 1000), next_collect_at: next.toISOString(), updated_at: new Date().toISOString() })
+    .update({
+      tracking_enabled: true,
+      discovery_status: status,
+      failure_count: failures,
+      last_error: message.slice(0, 1000),
+      next_collect_at: next.toISOString(),
+      updated_at: new Date().toISOString()
+    })
     .eq("id", artist.id);
   ensure(null, error, "save artist failure");
 }
@@ -360,7 +378,13 @@ async function getOpsSummary() {
     supabase.from("job_errors").select("*").order("created_at", { ascending: false }).limit(20)
   ]);
   for (const result of [artistCount, playlistCount, usage, latestRuns, errors]) ensure(null, result.error, "ops summary");
-  return { artistCount: artistCount.count || 0, playlistCount: playlistCount.count || 0, usage: usage.data?.[0] || null, latestRuns: latestRuns.data || [], errors: errors.data || [] };
+  return {
+    artistCount: artistCount.count || 0,
+    playlistCount: playlistCount.count || 0,
+    usage: usage.data?.[0] || null,
+    latestRuns: latestRuns.data || [],
+    errors: errors.data || []
+  };
 }
 
 module.exports = {
