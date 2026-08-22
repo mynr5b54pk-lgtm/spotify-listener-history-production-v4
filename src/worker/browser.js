@@ -25,7 +25,9 @@ async function newPage(browser) {
 
   await page.route("**/*", async (route) => {
     const type = route.request().resourceType();
-    if (["font", "media"].includes(type)) {
+    // We only need DOM text, links and image src attributes. Downloading image
+    // bytes, fonts and media wastes bandwidth/CPU and slows thousands of pages.
+    if (["image", "font", "media"].includes(type)) {
       await route.abort();
     } else {
       await route.continue();

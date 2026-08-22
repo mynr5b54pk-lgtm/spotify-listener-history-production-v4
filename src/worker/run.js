@@ -60,16 +60,17 @@ const { uuid, deadlineFromMinutes } = require("../lib/utils");
 
     logger.info({ quota }, "worker started");
 
-    const discovery = await discoverPlaylists(
-      quota.discoveryAllowed,
+    // Listener history is the core product. Do this first so playlist discovery
+    // can never consume the runtime budget needed for due active artists.
+    const collect = await collectArtists(
+      quota.artistAllowed,
       deadline,
       runToken
     );
-    usage.discoveryAttempted = discovery.completed + discovery.failures;
-    usage.discoveryCompleted = discovery.completed;
-    stats.discoveryQueriesCompleted = discovery.completed;
-    stats.discoveredPlaylists = discovery.discoveredPlaylists;
-    stats.failedJobs += discovery.failures;
+    usage.artistAttempted = collect.completed + collect.failures;
+    usage.artistCompleted = collect.completed;
+    stats.artistUpdatesCompleted = collect.completed;
+    stats.failedJobs += collect.failures;
 
     const scan = await scanPlaylists(
       quota.playlistAllowed,
@@ -82,17 +83,18 @@ const { uuid, deadlineFromMinutes } = require("../lib/utils");
     stats.discoveredArtists = scan.discoveredArtists;
     stats.failedJobs += scan.failures;
 
-    const collect = await collectArtists(
-      quota.artistAllowed,
+    const discovery = await discoverPlaylists(
+      quota.discoveryAllowed,
       deadline,
       runToken
     );
-    usage.artistAttempted = collect.completed + collect.failures;
-    usage.artistCompleted = collect.completed;
-    stats.artistUpdatesCompleted = collect.completed;
-    stats.failedJobs += collect.failures;
-    stats.durationSeconds = Math.round((Date.now() - started) / 1000);
+    usage.discoveryAttempted = discovery.completed + discovery.failures;
+    usage.discoveryCompleted = discovery.completed;
+    stats.discoveryQueriesCompleted = discovery.completed;
+    stats.discoveredPlaylists = discovery.discoveredPlaylists;
+    stats.failedJobs += discovery.failures;
 
+    stats.durationSeconds = Math.round((Date.now() - started) / 1000);
     await finalizeQuotaOnce();
 
     const status =

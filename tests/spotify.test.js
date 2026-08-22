@@ -14,6 +14,9 @@ test("clean canonical Spotify artist names", () => {
   assert.equal(cleanArtistName("  King   Gnu  "), "King Gnu");
   assert.equal(cleanArtistName("1,234 monthly listeners"), null);
   assert.equal(cleanArtistName("Spotify artist abc123"), null);
+  assert.equal(cleanArtistName("Your Library"), null);
+  assert.equal(cleanArtistName("Home"), "Home");
+  assert.equal(cleanArtistName("Search"), "Search");
 });
 
 test("parse compact numbers", () => {
