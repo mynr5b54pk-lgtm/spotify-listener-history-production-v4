@@ -6,9 +6,19 @@ function cleanArtistName(raw) {
     .replace(/\s+/g, " ")
     .trim();
 
+  const shellLabels = new Set([
+    "your library",
+    "home",
+    "search",
+    "spotify",
+    "liked songs",
+    "create playlist"
+  ]);
+
   if (
     !name ||
     name.length > 200 ||
+    shellLabels.has(name.toLowerCase()) ||
     /^spotify artist\b/i.test(name) ||
     /monthly listeners|月間リスナー/i.test(name)
   ) {
@@ -19,16 +29,17 @@ function cleanArtistName(raw) {
 }
 
 async function extractArtistName(page) {
-  const heading = await page.locator("h1").first().textContent().catch(() => null);
-  const headingName = cleanArtistName(heading);
-  if (headingName) return headingName;
-
+  // Spotify's first h1 can be shell UI such as "Your Library". The Open Graph
+  // title is tied to the loaded artist page and is therefore the safer source.
   const metadata = await page
     .locator('meta[property="og:title"]')
     .getAttribute("content")
     .catch(() => null);
+  const metadataName = cleanArtistName(metadata);
+  if (metadataName) return metadataName;
 
-  return cleanArtistName(metadata);
+  const heading = await page.locator("main h1").first().textContent().catch(() => null);
+  return cleanArtistName(heading);
 }
 
 function parseCompactNumber(raw) {
