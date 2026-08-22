@@ -1,171 +1,86 @@
 # Spotify Listener History Production v4
 
-探索、プレイリスト巡回、アーティスト登録、月間リスナー履歴、公開API、運用監視画面を一体化した最初の本番版です。
+Spotifyのアーティスト探索、プレイリスト巡回、月間リスナー収集、履歴保存、公開API、運用監視をまとめた本番用バックエンドです。
 
-## 収録機能
+## 現在の本番仕様
 
-- Spotify検索語によるプレイリスト自動発見
-- 発見済みプレイリストの定期再巡回
-- アーティスト自動登録
-- 月間リスナー履歴保存
-- 1万人以上は168時間（7日）ごとに更新
-- 1万人未満は30日ごとに再確認
-- 日次上限
-- 1回あたりの上限
-- DB排他ロック
-- 並列ブラウザ処理
-- ランダム待機
-- 指数バックオフ
-- 連続失敗時の自動停止
-- 実行履歴
-- エラー履歴
-- 公開検索API
-- アーティスト履歴API
-- 公開ダッシュボード
-- 管理用サマリーAPI
-- Docker
-- GitHub Actions
-- テスト
+- GitHub Actions: 3時間ごとに起動
+- アクティブアーティスト: 原則24時間ごとに再取得
+- 1万人未満: 30日ごとに再確認
+- 履歴: 1アーティストにつきUTC日ごとに1点。1日に複数回成功した場合はその日の最新値へ更新
+- 収集優先順位: active / retry対象を優先し、残り枠でcandidate / below_thresholdを処理
+- 取得失敗: 指数バックオフで再試行。既に公開済みのアーティストは一時的な取得失敗だけでは公開状態から外さない
+- プレイリスト: 7日ごとに再巡回
+- アーティスト履歴API: 1000件・365件の固定打ち切りなし。ページングして全履歴を取得
+- 検索: 大文字小文字、空白、ハイフンなどの句読点差を吸収し、先頭の `The` 省略にも対応。完全一致・前方一致を優先
 
-## 本番上限
+## 現在の本番上限
 
-1日:
+GitHub Actionsの1回あたり設定:
 
-- アーティスト更新 10,000人
-- プレイリスト巡回 800件
-- Spotify検索 160検索語
+- アーティスト更新: 2,500件
+- プレイリスト巡回: 100件
+- Spotify検索: 20検索語
 
-GitHub Actionsを3時間ごとに実行し、DBの `daily_usage` で日次上限を管理します。
+1日あたりの安全上限:
 
-## 導入手順
+- アーティスト更新予約: 50,000件
+- プレイリスト巡回: 800件
+- Spotify検索: 160検索語
 
-### 1. ZIPを展開してVS Codeで開く
+アーティスト側の50,000件/日は、現在の3時間ごと・2,500件/回では通常到達しない安全上限です。
 
-### 2. SupabaseへSQLを実行
+## Supabase SQL
 
-Supabaseの SQL Editor で次のファイルを実行します。
+新規環境では `sql/001_production_v4.sql` を適用した後、番号順に追加マイグレーションを適用してください。既存本番環境では未適用の番号だけを順番に適用します。
 
 ```text
 sql/001_production_v4.sql
-```
-
-既存環境を公開向け設定へ更新する場合は、追加で次を1回実行します。
-
-```text
 sql/002_public_security.sql
+sql/003_artist_aliases.sql
+sql/003_artist_canonical_names.sql
+sql/004_fix_artist_search.sql
+sql/005_daily_listener_history.sql
+sql/006_remove_hidden_collection_limits.sql
+sql/007_second_audit_fixes.sql
 ```
 
-### 3. `.env` を作る
-
-`.env.example` を複製して `.env` に変更します。
-
-```env
-SUPABASE_URL=https://jsqrkbsfaosyunsnknly.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
-ADMIN_TOKEN=長いランダム文字列
-HEADLESS=false
-```
-
-注意:
-
-- `sb_publishable_...` は使用しません。
-- SupabaseのSecret key `sb_secret_...` を使います。
-- `.env` はGitへ追加しません。
-- `SUPABASE_SERVICE_ROLE_KEY` と `ADMIN_TOKEN` はブラウザ側へ埋め込みません。
-- `ADMIN_TOKEN` は32文字以上のランダム値にします。
-
-### 4. インストール
+## ローカル実行
 
 ```bash
 npm install
 npm run install:browsers
-```
-
-### 5. テスト
-
-```bash
 npm test
-```
-
-### 6. ローカルでワーカー実行
-
-```bash
 npm run worker
-```
-
-### 7. Web画面を起動
-
-```bash
 npm start
 ```
 
-ブラウザで:
-
-```text
-http://localhost:3000
-```
-
-ヘルスチェック:
-
-```text
-http://localhost:3000/healthz
-```
-
-### 8. GitHub Secrets
-
-GitHub Repository Settings → Secrets and variables → Actions に追加:
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `ADMIN_TOKEN`
-
-### 9. GitHub Actions
-
-Actions → `Spotify production worker v4` → Run workflow
-
-成功後は3時間ごとに自動実行されます。
-
-## API
-
-アーティスト一覧:
+公開API:
 
 ```text
 GET /api/v1/artists?q=artist&page=1&limit=50
-```
-
-アーティストと履歴:
-
-```text
 GET /api/v1/artists/:id
 ```
 
-管理サマリー:
+管理API:
 
 ```text
 GET /api/admin/summary
 x-admin-token: ADMIN_TOKEN
 ```
 
-## 運用上の注意
+## 必須Secret
 
-SpotifyのWeb画面をPlaywrightで読む方式は、Spotify側の画面変更やアクセス制御の影響を受けます。完全に無停止を保証する方式ではありません。
+GitHub Actionsには次を登録します。
 
-`worker_runs` と `job_errors` を確認し、失敗率や実行時間が急増した場合は以下を調整してください。
+```text
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+ADMIN_TOKEN
+```
 
-- `BROWSER_CONCURRENCY`
-- `REQUEST_DELAY_MS`
-- `MAX_*_PER_DAY`
-- セレクタ・解析ロジック
+`SUPABASE_SERVICE_ROLE_KEY` と `ADMIN_TOKEN` はブラウザ側へ埋め込まないでください。
 
-Secret keyはブラウザへ埋め込まず、サーバーとGitHub Secretsだけで扱ってください。
+## 運用メモ
 
-
-## v4.1 最適化内容
-
-- 新規候補は初回取得時に月間リスナーが `MIN_MONTHLY_LISTENERS` 未満なら削除し、登録対象にしません。
-- 既存アーティストは基準未満になっても削除せず、`BELOW_THRESHOLD_RECHECK_DAYS` 後に再確認します。
-- 基準以上のアーティストは `ACTIVE_RECHECK_HOURS=168`（7日）ごとに更新します。
-- ダッシュボードの HTML / JavaScript / CSS は UTF-8 を明示し、日本語の文字化けを防止します。
-- CSS と JavaScript のURLにバージョンを付け、古い文字化け済みキャッシュを避けます。
-
-現在約3,039件ある既存データは、この変更だけでは削除されません。
+Spotify Web画面をPlaywrightで読むため、Spotify側のUI変更やアクセス制限の影響は受けます。`worker_runs` と `job_errors` を確認し、実行時間・失敗率・未処理件数が増えた場合は収集容量や解析ロジックを見直します。

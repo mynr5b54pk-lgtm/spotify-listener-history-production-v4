@@ -45,8 +45,6 @@ function parseCompactNumber(raw) {
   const value = Number(numberMatch[0].replace(/,/g, ""));
   if (!Number.isFinite(value)) return null;
 
-  // Only treat K/M/B as a suffix when it is a standalone unit.
-  // This prevents the M in "monthly listeners" from becoming "million".
   const remainder = normalized.slice(numberMatch.index + numberMatch[0].length);
   const suffix = remainder.match(/^\s*([KMB])(?=$|[\s),])/);
 
@@ -88,56 +86,92 @@ function extractMonthlyListeners(text) {
   return null;
 }
 
-async function extractPlaylistLinks(page) {
-  return page.locator('a[href*="/playlist/"]').evaluateAll((anchors) => {
-    const seen = new Set();
-    const output = [];
+async function collectAnchorSnapshots(page, selector, options = {}) {
+  const {
+    maxRounds = 60,
+    stableRounds = 4,
+    wheelY = 1800,
+    waitMs = 350
+  } = options;
 
-    for (const anchor of anchors) {
-      const href = anchor.href || "";
-      const match = href.match(/\/playlist\/([A-Za-z0-9]+)/);
-      if (!match || seen.has(match[1])) continue;
+  const snapshots = new Map();
+  let unchangedRounds = 0;
 
-      seen.add(match[1]);
-      output.push({
-        spotifyId: match[1],
-        spotifyUrl: `https://open.spotify.com/playlist/${match[1]}`,
-        name: (anchor.textContent || "").trim() || null
-      });
+  for (let round = 0; round < maxRounds; round += 1) {
+    const visible = await page.locator(selector).evaluateAll((anchors) =>
+      anchors.map((anchor) => ({
+        href: anchor.href || "",
+        text: (anchor.textContent || "").trim(),
+        imageUrl: anchor.querySelector("img")?.src || null
+      }))
+    );
+
+    const before = snapshots.size;
+    for (const item of visible) {
+      if (item.href) snapshots.set(item.href, item);
     }
 
-    return output;
-  });
+    if (snapshots.size === before) unchangedRounds += 1;
+    else unchangedRounds = 0;
+
+    if (unchangedRounds >= stableRounds) break;
+
+    await page.mouse.wheel(0, wheelY);
+    await page.waitForTimeout(waitMs);
+  }
+
+  return [...snapshots.values()];
+}
+
+async function extractPlaylistLinks(page) {
+  const anchors = await collectAnchorSnapshots(
+    page,
+    'a[href*="/playlist/"]',
+    { maxRounds: 30, stableRounds: 3 }
+  );
+
+  const seen = new Set();
+  const output = [];
+
+  for (const anchor of anchors) {
+    const match = anchor.href.match(/\/playlist\/([A-Za-z0-9]+)/);
+    if (!match || seen.has(match[1])) continue;
+
+    seen.add(match[1]);
+    output.push({
+      spotifyId: match[1],
+      spotifyUrl: `https://open.spotify.com/playlist/${match[1]}`,
+      name: anchor.text || null
+    });
+  }
+
+  return output;
 }
 
 async function extractArtistLinks(page) {
-  for (let i = 0; i < 16; i += 1) {
-    await page.mouse.wheel(0, 1800);
-    await page.waitForTimeout(350);
+  const anchors = await collectAnchorSnapshots(
+    page,
+    'a[href*="/artist/"]',
+    { maxRounds: 80, stableRounds: 5 }
+  );
+
+  const seen = new Set();
+  const output = [];
+
+  for (const anchor of anchors) {
+    const match = anchor.href.match(/\/artist\/([A-Za-z0-9]+)/);
+    if (!match || seen.has(match[1])) continue;
+
+    seen.add(match[1]);
+    output.push({
+      spotifyId: match[1],
+      spotifyUrl: `https://open.spotify.com/artist/${match[1]}`,
+      name: anchor.text || `Spotify artist ${match[1]}`,
+      imageUrl: anchor.imageUrl
+    });
   }
 
-  return page.locator('a[href*="/artist/"]').evaluateAll((anchors) => {
-    const seen = new Set();
-    const output = [];
-
-    for (const anchor of anchors) {
-      const href = anchor.href || "";
-      const match = href.match(/\/artist\/([A-Za-z0-9]+)/);
-      if (!match || seen.has(match[1])) continue;
-
-      seen.add(match[1]);
-      const image = anchor.querySelector("img");
-
-      output.push({
-        spotifyId: match[1],
-        spotifyUrl: `https://open.spotify.com/artist/${match[1]}`,
-        name: (anchor.textContent || "").trim() || `Spotify artist ${match[1]}`,
-        imageUrl: image?.src || null
-      });
-    }
-
-    return output;
-  });
+  return output;
 }
 
 module.exports = {
