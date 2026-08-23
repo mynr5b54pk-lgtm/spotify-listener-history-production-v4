@@ -26,6 +26,23 @@ function loadSeedQueries() {
     .filter(Boolean);
 }
 
+function assertPlaylistSearchPage(page) {
+  let url;
+  try {
+    url = new URL(page.url());
+  } catch {
+    throw new Error(`unexpected discovery page: ${page.url()}`);
+  }
+
+  if (
+    url.hostname !== "open.spotify.com" ||
+    !url.pathname.startsWith("/search/") ||
+    !url.pathname.endsWith("/playlists")
+  ) {
+    throw new Error(`unexpected discovery page: ${page.url()}`);
+  }
+}
+
 async function discoverPlaylists(limit, deadline, runToken) {
   await seedDiscoveryQueries(loadSeedQueries());
 
@@ -53,6 +70,7 @@ async function discoverPlaylists(limit, deadline, runToken) {
             timeout: config.PAGE_TIMEOUT_MS
           });
           await page.waitForTimeout(config.PAGE_SETTLE_MS);
+          assertPlaylistSearchPage(page);
           return extractPlaylistLinks(page);
         }, {
           retries: config.MAX_RETRIES,

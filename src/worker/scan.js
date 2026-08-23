@@ -18,6 +18,13 @@ const {
   isPastDeadline
 } = require("../lib/utils");
 
+function assertPlaylistPage(page, playlist) {
+  const match = page.url().match(/\/playlist\/([A-Za-z0-9]+)/);
+  if (!match || match[1] !== playlist.spotify_id) {
+    throw new Error(`unexpected playlist page: ${page.url()}`);
+  }
+}
+
 async function scanOne(browser, playlist, deadline, runToken) {
   if (isPastDeadline(deadline)) return { skipped: true };
 
@@ -30,6 +37,7 @@ async function scanOne(browser, playlist, deadline, runToken) {
         timeout: config.PAGE_TIMEOUT_MS
       });
       await page.waitForTimeout(config.PAGE_SETTLE_MS);
+      assertPlaylistPage(page, playlist);
       return extractArtistLinks(page);
     }, {
       retries: config.MAX_RETRIES,
