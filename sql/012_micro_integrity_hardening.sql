@@ -73,49 +73,25 @@ alter table public.worker_runs
     (duration_seconds is null or duration_seconds >= 0)
   );
 
--- Use database time for run completion. Runner and database clocks can differ
--- by fractions of a second; one historical row had finished_at < started_at.
-create or replace function public.finish_worker_run(
-  p_run_id bigint,
-  p_status text,
-  p_artist_updates_completed integer,
-  p_playlist_scans_completed integer,
-  p_discovery_queries_completed integer,
-  p_discovered_playlists integer,
-  p_discovered_artists integer,
-  p_failed_jobs integer,
-  p_duration_seconds integer,
-  p_notes text
-)
-returns void
+-- Runner and database clocks can differ by fractions of a second. Clamp a
+-- client-supplied completion timestamp to started_at before enforcing order.
+create or replace function public.guard_worker_run_timestamps()
+returns trigger
 language plpgsql
-security definer
 set search_path = public, pg_temp
 as $$
 begin
-  if p_status not in ('running','success','partial','failed','skipped') then
-    raise exception 'invalid worker status';
+  if new.finished_at is not null and new.finished_at < new.started_at then
+    new.finished_at := new.started_at;
   end if;
-
-  update public.worker_runs
-  set status = p_status,
-      finished_at = greatest(now(), started_at),
-      artist_updates_completed = greatest(0, coalesce(p_artist_updates_completed, 0)),
-      playlist_scans_completed = greatest(0, coalesce(p_playlist_scans_completed, 0)),
-      discovery_queries_completed = greatest(0, coalesce(p_discovery_queries_completed, 0)),
-      discovered_playlists = greatest(0, coalesce(p_discovered_playlists, 0)),
-      discovered_artists = greatest(0, coalesce(p_discovered_artists, 0)),
-      failed_jobs = greatest(0, coalesce(p_failed_jobs, 0)),
-      duration_seconds = greatest(0, coalesce(p_duration_seconds, 0)),
-      notes = p_notes
-  where id = p_run_id;
+  return new;
 end;
 $$;
 
-revoke all on function public.finish_worker_run(bigint,text,integer,integer,integer,integer,integer,integer,integer,text)
-  from public, anon, authenticated;
-grant execute on function public.finish_worker_run(bigint,text,integer,integer,integer,integer,integer,integer,integer,text)
-  to service_role;
+drop trigger if exists worker_runs_guard_timestamps on public.worker_runs;
+create trigger worker_runs_guard_timestamps
+before insert or update of started_at, finished_at on public.worker_runs
+for each row execute function public.guard_worker_run_timestamps();
 
 -- Repair the one historical sub-second clock-skew artifact before enforcing
 -- the invariant for future rows.
