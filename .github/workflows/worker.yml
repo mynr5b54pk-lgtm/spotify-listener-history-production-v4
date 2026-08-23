@@ -5,7 +5,7 @@ on:
   schedule:
     # Keep the 3-hour cadence but use an uncommon minute to avoid the busiest
     # scheduler boundaries and force GitHub to register the schedule afresh.
-    - cron: '37 */3 * * *'
+    - cron: '47 */3 * * *'
 
 permissions:
   contents: read
