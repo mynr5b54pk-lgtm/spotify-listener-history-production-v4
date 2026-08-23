@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
   schedule:
     # Independent fallback schedule. It is lightweight unless the primary worker
-    # has failed to start for four hours.
-    - cron: '11 * * * *'
+    # has failed to start for four hours. The uncommon minute also helps GitHub
+    # re-register the schedule after workflow changes.
+    - cron: '17 * * * *'
 
 permissions:
   contents: read
