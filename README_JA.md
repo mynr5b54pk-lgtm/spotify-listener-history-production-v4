@@ -8,14 +8,15 @@ Spotifyのアーティスト探索、プレイリスト巡回、月間リスナ�
 - アクティブアーティスト: 原則24時間ごとに再取得
 - 1万人未満: 30日ごとに再確認
 - 履歴: 1アーティストにつきUTC日ごとに1点。1日に複数回成功した場合はその日の最新値へ更新
-- 収集優先順位: active / retry対象を優先し、残り枠でcandidate / below_thresholdを処理
+- 収集優先順位: `active` → 未成功の`error`再試行 → `candidate` → `below_threshold`
 - ワーカー内の処理順: 月間リスナー収集を最優先し、その後にプレイリスト巡回・新規探索を実行
 - 取得失敗: 指数バックオフで再試行。既に公開済みのアーティストは一時的な取得失敗だけでは公開状態から外さない
 - 異常値: 前回比3倍超/3分の1未満の値は再読み込みで一致確認してから保存
 - プレイリスト: 7日ごとに再巡回
+- アーティスト名: Spotify Open Graph metadataを正規名として優先。プレイリスト上のリンク文字列は、正常取得済みアーティストの正規名を上書きしない
+- 誤取得対策: 確認済みのSpotify UIラベル `Your Library` は正規名・別名として保存しない
 - アーティスト履歴API: 1000件・365件の固定打ち切りなし。ページングして全履歴を取得
 - 検索: 大文字小文字、空白、ハイフンなどの句読点差を吸収し、先頭の `The` 省略にも対応。完全一致・前方一致を優先。1文字検索は無効
-- アーティスト名: Spotify Open Graph metadataを優先し、確認済みの誤取得ラベル `Your Library` は保存しない
 
 ## 現在の本番上限
 
@@ -41,7 +42,6 @@ GitHub Actionsの1回あたり設定:
 sql/001_production_v4.sql
 sql/002_public_security.sql
 sql/003_artist_aliases.sql
-sql/003_artist_canonical_names.sql
 sql/004_fix_artist_search.sql
 sql/005_daily_listener_history.sql
 sql/006_remove_hidden_collection_limits.sql
@@ -50,6 +50,7 @@ sql/008_quota_accounting.sql
 sql/009_artist_identity_integrity.sql
 sql/010_search_performance.sql
 sql/011_scalability_cleanup.sql
+sql/012_micro_integrity_hardening.sql
 ```
 
 ## ローカル実行
