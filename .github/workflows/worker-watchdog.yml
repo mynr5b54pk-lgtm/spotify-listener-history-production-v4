@@ -2,6 +2,13 @@ name: Spotify worker watchdog
 
 on:
   workflow_dispatch:
+  # A watchdog configuration change on main should immediately verify that the
+  # scheduler/fallback path can execute, rather than waiting for the next hour.
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/worker-watchdog.yml'
   schedule:
     # Independent fallback schedule. It is lightweight unless the primary worker
     # has failed to start for four hours. The uncommon minute also helps GitHub
