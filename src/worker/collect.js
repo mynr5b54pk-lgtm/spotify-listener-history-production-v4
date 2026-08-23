@@ -6,7 +6,7 @@ const {
   saveArtistFailure,
   logJobError
 } = require("../lib/db");
-const { extractMonthlyListeners, extractArtistName } = require("../lib/spotify");
+const { extractMonthlyListenersFromPage, extractArtistName } = require("../lib/spotify");
 const { launchBrowser, newPage } = require("./browser");
 const {
   mapLimit,
@@ -26,8 +26,7 @@ function assertArtistPage(page, artist) {
 
 async function readArtistPage(page, artist) {
   assertArtistPage(page, artist);
-  const text = await page.locator("body").innerText();
-  const listeners = extractMonthlyListeners(text);
+  const listeners = await extractMonthlyListenersFromPage(page);
   if (listeners === null || listeners < 0 || listeners > 1_000_000_000) {
     throw new Error("monthly listeners not found or out of range");
   }
@@ -37,11 +36,12 @@ async function readArtistPage(page, artist) {
   };
 }
 
-function isExtremeChange(previous, current) {
+function needsAnomalyConfirmation(previous, current) {
   const before = Number(previous);
   const after = Number(current);
   if (!Number.isFinite(before) || before <= 0 || !Number.isFinite(after) || after <= 0) return false;
-  return after / before > 3 || before / after > 3;
+  const ratio = Math.max(after / before, before / after);
+  return ratio >= config.ANOMALY_RECHECK_RATIO;
 }
 
 async function collectOne(browser, artist, deadline, runToken) {
@@ -59,14 +59,17 @@ async function collectOne(browser, artist, deadline, runToken) {
 
       const first = await readArtistPage(page, artist);
 
-      if (isExtremeChange(artist.monthly_listeners_latest, first.listeners)) {
+      if (needsAnomalyConfirmation(artist.monthly_listeners_latest, first.listeners)) {
         await page.reload({ waitUntil: "domcontentloaded", timeout: config.PAGE_TIMEOUT_MS });
         await page.waitForTimeout(config.PAGE_SETTLE_MS);
         const confirmation = await readArtistPage(page, artist);
         const difference = Math.abs(confirmation.listeners - first.listeners);
-        const tolerance = Math.max(10, Math.round(first.listeners * 0.01));
+        const tolerance = Math.max(
+          10,
+          Math.round(first.listeners * config.ANOMALY_CONFIRM_TOLERANCE_PERCENT / 100)
+        );
         if (difference > tolerance) {
-          throw new Error(`unconfirmed listener jump: ${first.listeners} -> ${confirmation.listeners}`);
+          throw new Error(`unconfirmed listener change: ${first.listeners} -> ${confirmation.listeners}`);
         }
         return confirmation;
       }
@@ -120,7 +123,7 @@ async function collectArtists(limit, deadline, runToken) {
   }
 }
 
-module.exports = { collectArtists };
+module.exports = { collectArtists, needsAnomalyConfirmation };
 
 if (require.main === module) {
   const { deadlineFromMinutes, uuid } = require("../lib/utils");

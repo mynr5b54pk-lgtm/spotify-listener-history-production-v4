@@ -10,7 +10,7 @@ const { reserveRunQuota, finalizeRunQuota } = require("../lib/quota");
 const { discoverPlaylists } = require("./discover");
 const { scanPlaylists } = require("./scan");
 const { collectArtists } = require("./collect");
-const { uuid, deadlineFromMinutes } = require("../lib/utils");
+const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
 
 (async () => {
   const started = Date.now();
@@ -72,27 +72,33 @@ const { uuid, deadlineFromMinutes } = require("../lib/utils");
     stats.artistUpdatesCompleted = collect.completed;
     stats.failedJobs += collect.failures;
 
-    const scan = await scanPlaylists(
-      quota.playlistAllowed,
-      deadline,
-      runToken
-    );
-    usage.playlistAttempted = scan.completed + scan.failures;
-    usage.playlistCompleted = scan.completed;
-    stats.playlistScansCompleted = scan.completed;
-    stats.discoveredArtists = scan.discoveredArtists;
-    stats.failedJobs += scan.failures;
+    if (!isPastDeadline(deadline)) {
+      const scan = await scanPlaylists(
+        quota.playlistAllowed,
+        deadline,
+        runToken
+      );
+      usage.playlistAttempted = scan.completed + scan.failures;
+      usage.playlistCompleted = scan.completed;
+      stats.playlistScansCompleted = scan.completed;
+      stats.discoveredArtists = scan.discoveredArtists;
+      stats.failedJobs += scan.failures;
+    } else {
+      stats.notes = "runtime budget exhausted after artist collection; discovery deferred";
+    }
 
-    const discovery = await discoverPlaylists(
-      quota.discoveryAllowed,
-      deadline,
-      runToken
-    );
-    usage.discoveryAttempted = discovery.completed + discovery.failures;
-    usage.discoveryCompleted = discovery.completed;
-    stats.discoveryQueriesCompleted = discovery.completed;
-    stats.discoveredPlaylists = discovery.discoveredPlaylists;
-    stats.failedJobs += discovery.failures;
+    if (!isPastDeadline(deadline)) {
+      const discovery = await discoverPlaylists(
+        quota.discoveryAllowed,
+        deadline,
+        runToken
+      );
+      usage.discoveryAttempted = discovery.completed + discovery.failures;
+      usage.discoveryCompleted = discovery.completed;
+      stats.discoveryQueriesCompleted = discovery.completed;
+      stats.discoveredPlaylists = discovery.discoveredPlaylists;
+      stats.failedJobs += discovery.failures;
+    }
 
     stats.durationSeconds = Math.round((Date.now() - started) / 1000);
     await finalizeQuotaOnce();
