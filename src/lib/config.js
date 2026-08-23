@@ -20,14 +20,17 @@ const schema = z.object({
   MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(100),
   MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(20),
 
-  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(3),
+  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(4),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
   REQUEST_JITTER_MS: z.coerce.number().int().nonnegative().default(1200),
   PAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
   PAGE_SETTLE_MS: z.coerce.number().int().nonnegative().default(4500),
   MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
   RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().default(5000),
-  MAX_RUNTIME_MINUTES: z.coerce.number().int().positive().default(325),
+  MAX_RUNTIME_MINUTES: z.coerce.number().int().positive().default(170),
+  ANOMALY_RECHECK_RATIO: z.coerce.number().min(1.05).max(10).default(1.5),
+  ANOMALY_CONFIRM_TOLERANCE_PERCENT: z.coerce.number().min(0.1).max(10).default(1),
+  WORKER_STALE_HOURS: z.coerce.number().min(1).max(24).default(4),
 
   MIN_MONTHLY_LISTENERS: z.coerce.number().int().nonnegative().default(10000),
   ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(24),
@@ -35,7 +38,7 @@ const schema = z.object({
   PLAYLIST_RESCAN_DAYS: z.coerce.number().int().positive().default(7),
 
   WORKER_NAME: z.string().default("spotify-production-worker-v4"),
-  LOCK_TTL_MINUTES: z.coerce.number().int().positive().default(340),
+  LOCK_TTL_MINUTES: z.coerce.number().int().positive().default(175),
 
   PUBLIC_API_PAGE_SIZE: z.coerce.number().int().positive().default(50),
   PUBLIC_API_MAX_PAGE_SIZE: z.coerce.number().int().positive().max(100).default(100),
