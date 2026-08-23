@@ -16,7 +16,12 @@ async function reserveRunQuota() {
     p_discovery_daily_max: config.MAX_DISCOVERY_QUERIES_PER_DAY
   });
 
-  const row = ensure(data, error, "reserve run quota")?.[0] || {};
+  const rows = ensure(data, error, "reserve run quota") || [];
+  const row = rows[0];
+  if (!row?.usage_date) {
+    throw new Error("reserve run quota: missing reservation row");
+  }
+
   return {
     usageDate: row.usage_date,
     artistAllowed: Number(row.artist_allowed || 0),
