@@ -1,0 +1,81 @@
+name: Spotify worker watchdog
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Independent fallback schedule. It is lightweight unless the primary worker
+    # has failed to start for four hours.
+    - cron: '11 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spotify-production-worker-v4
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check worker freshness
+        id: health
+        env:
+          NODE_ENV: production
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          WORKER_STALE_HOURS: '4'
+        run: node src/worker/check-stale.js
+
+      - name: Install Chromium for fallback
+        if: steps.health.outputs.stale == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run fallback worker
+        if: steps.health.outputs.stale == 'true'
+        env:
+          NODE_ENV: production
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          HEADLESS: 'true'
+          MAX_ARTIST_UPDATES_PER_DAY: '50000'
+          MAX_PLAYLIST_SCANS_PER_DAY: '800'
+          MAX_DISCOVERY_QUERIES_PER_DAY: '160'
+          MAX_ARTIST_UPDATES_PER_RUN: '2500'
+          MAX_PLAYLIST_SCANS_PER_RUN: '100'
+          MAX_DISCOVERY_QUERIES_PER_RUN: '20'
+          BROWSER_CONCURRENCY: '4'
+          REQUEST_DELAY_MS: '2200'
+          REQUEST_JITTER_MS: '1200'
+          PAGE_TIMEOUT_MS: '45000'
+          PAGE_SETTLE_MS: '4500'
+          MAX_RETRIES: '3'
+          RETRY_BASE_DELAY_MS: '5000'
+          MAX_RUNTIME_MINUTES: '170'
+          ANOMALY_RECHECK_RATIO: '1.5'
+          ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
+          MIN_MONTHLY_LISTENERS: '10000'
+          ACTIVE_RECHECK_HOURS: '24'
+          BELOW_THRESHOLD_RECHECK_DAYS: '30'
+          PLAYLIST_RESCAN_DAYS: '7'
+          WORKER_NAME: spotify-production-worker-v4
+          LOCK_TTL_MINUTES: '175'
+        run: npm run worker
