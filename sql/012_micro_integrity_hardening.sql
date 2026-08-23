@@ -30,6 +30,15 @@ begin
 end;
 $$;
 
+-- Put the few remaining corrupted rows at the very front of their collection
+-- queues. Their canonical names will be repaired from the artist page on the
+-- next successful collection rather than guessed from ambiguous aliases.
+update public.artists
+set next_collect_at = timestamptz '2000-01-01 00:00:00+00',
+    tracking_enabled = true,
+    updated_at = now()
+where lower(btrim(name)) = 'your library';
+
 -- Add lightweight invariants around counters and latest listener values. The
 -- current production data already satisfies these checks.
 alter table public.artists
