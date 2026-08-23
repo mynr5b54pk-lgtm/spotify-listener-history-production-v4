@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: spotify-production-worker-v4
-  cancel-in-progress: false
+  group: spotify-worker-watchdog
+  cancel-in-progress: true
 
 jobs:
   watchdog:
