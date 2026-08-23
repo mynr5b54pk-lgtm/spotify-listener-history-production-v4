@@ -86,4 +86,5 @@ jobs:
           PLAYLIST_RESCAN_DAYS: '7'
           WORKER_NAME: spotify-production-worker-v4
           LOCK_TTL_MINUTES: '175'
+        # This fallback also validates quota RPC compatibility after DB migrations.
         run: npm run worker
