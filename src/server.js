@@ -11,13 +11,23 @@ const adminApi = require("./api/admin");
 const app = express();
 app.set("trust proxy", config.TRUST_PROXY_HOPS);
 
+function normalizeOrigin(value) {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
 const allowedOrigins = new Set([
   config.APP_BASE_URL,
   ...config.CORS_ALLOWED_ORIGINS
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
-]);
+]
+  .map(normalizeOrigin)
+  .filter(Boolean));
 
 function createRateLimiter({ windowMs, maxRequests }) {
   const clients = new Map();
@@ -84,7 +94,7 @@ app.use(helmet({
 }));
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    if (!origin || allowedOrigins.has(normalizeOrigin(origin))) return callback(null, true);
     return callback(null, false);
   }
 }));
