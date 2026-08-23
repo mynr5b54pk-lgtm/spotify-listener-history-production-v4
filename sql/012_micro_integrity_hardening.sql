@@ -106,16 +106,32 @@ alter table public.worker_runs
     check (finished_at is null or finished_at >= started_at);
 
 -- Current collection order is active -> error -> candidate -> below-threshold.
--- This partial index makes the first, most important queue cheap as the table grows.
+-- These queue-oriented indexes match the actual ORDER BY clauses.
 create index if not exists artists_active_due_idx
   on public.artists(next_collect_at, id)
   where tracking_enabled = true and discovery_status = 'active';
+create index if not exists discovery_queries_due_priority_idx
+  on public.discovery_queries(priority, next_use_at, id)
+  where enabled = true;
 
--- Old pre-normalization search indexes and the superseded playlist due index
--- are no longer used by current queries; removing them reduces write overhead.
+-- Keep one canonical artist-history index. PostgreSQL B-tree indexes can scan
+-- in either direction, so a second ASC/DESC copy only increases write cost.
+create index if not exists monthly_listener_history_artist_collected_idx
+  on public.monthly_listener_history(artist_id, collected_at);
+drop index if exists public.listener_history_artist_time_idx;
+
+-- Old pre-normalization / superseded indexes are no longer used by current
+-- queries. Removing them reduces insert/update overhead as the dataset grows.
 drop index if exists public.artists_name_trgm_fallback_idx;
 drop index if exists public.artists_name_trgm_idx;
 drop index if exists public.site_artist_aliases_alias_trgm_idx;
+drop index if exists public.site_artist_aliases_lower_idx;
 drop index if exists public.playlists_due_idx;
+drop index if exists public.discovery_queries_due_idx;
+
+-- The worker moved to reservation-aware quota RPCs in migration 008. Remove
+-- the old functions so a future caller cannot accidentally bypass finalization.
+drop function if exists public.reserve_daily_quota(integer, integer, integer, integer, integer, integer);
+drop function if exists public.complete_daily_usage(integer, integer, integer);
 
 commit;
