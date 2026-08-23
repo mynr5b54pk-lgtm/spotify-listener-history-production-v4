@@ -7,15 +7,25 @@ const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
 });
 
 const POSTGREST_PAGE_SIZE = 1000;
+const INVALID_ALIAS_NAMES = new Set(["your library"]);
 
 function ensure(data, error, label) {
   if (error) throw new Error(`${label}: ${error.message}`);
   return data;
 }
 
+function isUsableAlias(value) {
+  const normalized = normalizeText(value);
+  return Boolean(
+    normalized &&
+    !INVALID_ALIAS_NAMES.has(normalized.toLowerCase()) &&
+    !/^spotify artist\b/i.test(normalized)
+  );
+}
+
 async function saveArtistAlias(artistId, alias) {
   const normalized = normalizeText(alias);
-  if (!artistId || !normalized) return;
+  if (!artistId || !isUsableAlias(normalized)) return;
   const { error } = await supabase
     .from("site_artist_aliases")
     .upsert({ artist_id: artistId, alias: normalized }, { onConflict: "artist_id,alias", ignoreDuplicates: true });
@@ -37,32 +47,6 @@ async function releaseLock(lockToken) {
     p_lock_token: lockToken
   });
   if (error) throw new Error(`release lock: ${error.message}`);
-}
-
-async function reserveQuota() {
-  const { data, error } = await supabase.rpc("reserve_daily_quota", {
-    p_artist_requested: config.MAX_ARTIST_UPDATES_PER_RUN,
-    p_playlist_requested: config.MAX_PLAYLIST_SCANS_PER_RUN,
-    p_discovery_requested: config.MAX_DISCOVERY_QUERIES_PER_RUN,
-    p_artist_daily_max: config.MAX_ARTIST_UPDATES_PER_DAY,
-    p_playlist_daily_max: config.MAX_PLAYLIST_SCANS_PER_DAY,
-    p_discovery_daily_max: config.MAX_DISCOVERY_QUERIES_PER_DAY
-  });
-  const row = ensure(data, error, "reserve quota")?.[0] || {};
-  return {
-    artistAllowed: Number(row.artist_allowed || 0),
-    playlistAllowed: Number(row.playlist_allowed || 0),
-    discoveryAllowed: Number(row.discovery_allowed || 0)
-  };
-}
-
-async function completeUsage(stats) {
-  const { error } = await supabase.rpc("complete_daily_usage", {
-    p_artist_completed: stats.artistUpdatesCompleted,
-    p_playlist_completed: stats.playlistScansCompleted,
-    p_discovery_completed: stats.discoveryQueriesCompleted
-  });
-  ensure(null, error, "complete usage");
 }
 
 async function createRun(runToken, quota) {
@@ -169,33 +153,51 @@ async function getDuePlaylists(limit) {
     .in("scan_status", ["pending", "active", "error"])
     .lte("next_scan_at", new Date().toISOString())
     .order("next_scan_at", { ascending: true })
+    .order("id", { ascending: true })
     .limit(limit);
   return ensure(data, error, "get playlists") || [];
 }
 
 async function upsertArtist(item) {
   const incomingName = normalizeText(item.name);
+  const incomingImage = normalizeText(item.imageUrl);
   const { data: existing, error: existingError } = await supabase
     .from("artists")
-    .select("id,name")
+    .select("id,name,image_url,last_collected_at")
     .eq("spotify_url", item.spotifyUrl)
     .maybeSingle();
   ensure(null, existingError, "find existing artist");
+
+  // Playlist link text is discovery metadata, not canonical artist metadata.
+  // Once an artist has been successfully collected, only the artist page is
+  // allowed to rename it. This prevents a later playlist scan from degrading
+  // an already-correct canonical name or wiping a known image with null.
+  const hasCanonicalMetadata = Boolean(existing?.last_collected_at);
+  const storedName = hasCanonicalMetadata && existing?.name
+    ? existing.name
+    : incomingName;
+  const storedImage = incomingImage || existing?.image_url || null;
 
   const { data, error } = await supabase
     .from("artists")
     .upsert({
       spotify_id: item.spotifyId,
       spotify_url: item.spotifyUrl,
-      name: incomingName,
-      image_url: item.imageUrl,
+      name: storedName,
+      image_url: storedImage,
       tracking_enabled: true,
       updated_at: new Date().toISOString()
     }, { onConflict: "spotify_url" })
     .select("id")
     .single();
   const artist = ensure(data, error, "upsert artist");
-  if (existing?.name && existing.name !== incomingName) await saveArtistAlias(artist.id, existing.name);
+
+  if (existing?.name && existing.name !== incomingName) {
+    await saveArtistAlias(artist.id, existing.name);
+  }
+  if (incomingName && storedName !== incomingName) {
+    await saveArtistAlias(artist.id, incomingName);
+  }
   return artist;
 }
 
@@ -251,11 +253,19 @@ async function fetchDueArtistsByStatuses(statuses, limit, deadline) {
 async function getDueArtists(limit) {
   if (limit <= 0) return [];
   const deadline = new Date().toISOString();
-  const tracked = await fetchDueArtistsByStatuses(["active", "error"], limit, deadline);
-  if (tracked.length >= limit) return tracked;
-  const remaining = limit - tracked.length;
-  const discovery = await fetchDueArtistsByStatuses(["candidate", "below_threshold"], remaining, deadline);
-  return [...tracked, ...discovery];
+  const selected = [];
+
+  // Keep the core product strict: due active artists can never be displaced by
+  // never-successful retry candidates. New discovery and low-listener rechecks
+  // only use capacity that remains after existing public artists.
+  for (const statuses of [["active"], ["error"], ["candidate"], ["below_threshold"]]) {
+    const remaining = limit - selected.length;
+    if (remaining <= 0) break;
+    const rows = await fetchDueArtistsByStatuses(statuses, remaining, deadline);
+    selected.push(...rows);
+  }
+
+  return selected;
 }
 
 async function saveDailyHistory(artistId, listeners, now) {
@@ -391,8 +401,6 @@ module.exports = {
   supabase,
   acquireLock,
   releaseLock,
-  reserveQuota,
-  completeUsage,
   createRun,
   finishRun,
   logJobError,
