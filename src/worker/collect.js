@@ -6,6 +6,7 @@ const {
   saveArtistFailure,
   logJobError
 } = require("../lib/db");
+const { getPriorityRepairArtists } = require("../lib/repairs");
 const { extractMonthlyListenersFromPage, extractArtistName } = require("../lib/spotify");
 const { launchBrowser, newPage } = require("./browser");
 const {
@@ -102,7 +103,15 @@ async function collectOne(browser, artist, deadline, runToken) {
 }
 
 async function collectArtists(limit, deadline, runToken) {
-  const artists = await getDueArtists(limit);
+  const priorityRepairs = await getPriorityRepairArtists(limit);
+  const remaining = Math.max(0, limit - priorityRepairs.length);
+  const regularArtists = await getDueArtists(remaining);
+  const repairIds = new Set(priorityRepairs.map((artist) => artist.id));
+  const artists = [
+    ...priorityRepairs,
+    ...regularArtists.filter((artist) => !repairIds.has(artist.id))
+  ].slice(0, limit);
+
   if (!artists.length) return { completed: 0, failures: 0 };
 
   const browser = await launchBrowser();
