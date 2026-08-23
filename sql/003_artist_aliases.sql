@@ -13,6 +13,7 @@ create index if not exists site_artist_aliases_lower_idx
 alter table public.site_artist_aliases enable row level security;
 
 revoke all on table public.site_artist_aliases from anon, authenticated;
+grant select, insert, update, delete on table public.site_artist_aliases to service_role;
 
 insert into public.site_artist_aliases (artist_id, alias)
 select id, name
