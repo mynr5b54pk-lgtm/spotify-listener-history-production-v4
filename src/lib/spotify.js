@@ -79,6 +79,37 @@ function extractMonthlyListeners(text) {
   return null;
 }
 
+async function extractMonthlyListenersFromPage(page) {
+  const candidates = [];
+
+  const bodyText = await page.locator("body").innerText().catch(() => null);
+  if (bodyText) candidates.push(bodyText);
+
+  for (const selector of [
+    'meta[name="description"]',
+    'meta[property="og:description"]',
+    'meta[name="twitter:description"]'
+  ]) {
+    const value = await page.locator(selector).getAttribute("content").catch(() => null);
+    if (value) candidates.push(value);
+  }
+
+  const labelled = await page.locator(
+    '[aria-label*="monthly listener" i], [title*="monthly listener" i]'
+  ).evaluateAll((nodes) => nodes.flatMap((node) => [
+    node.getAttribute("aria-label"),
+    node.getAttribute("title"),
+    node.textContent
+  ]).filter(Boolean)).catch(() => []);
+  candidates.push(...labelled);
+
+  for (const candidate of candidates) {
+    const value = extractMonthlyListeners(candidate);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
 async function collectAnchorSnapshots(page, selector, options = {}) {
   const { maxRounds = 60, stableRounds = 4, wheelY = 1800, waitMs = 350 } = options;
   const snapshots = new Map();
@@ -132,4 +163,12 @@ async function extractArtistLinks(page) {
   return output;
 }
 
-module.exports = { cleanArtistName, extractArtistName, parseCompactNumber, extractMonthlyListeners, extractPlaylistLinks, extractArtistLinks };
+module.exports = {
+  cleanArtistName,
+  extractArtistName,
+  parseCompactNumber,
+  extractMonthlyListeners,
+  extractMonthlyListenersFromPage,
+  extractPlaylistLinks,
+  extractArtistLinks
+};
