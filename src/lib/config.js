@@ -12,13 +12,13 @@ const schema = z.object({
   HEADLESS: z.string().default("true"),
   LOG_LEVEL: z.string().default("info"),
 
-  MAX_ARTIST_UPDATES_PER_DAY: z.coerce.number().int().nonnegative().default(10000),
-  MAX_PLAYLIST_SCANS_PER_DAY: z.coerce.number().int().nonnegative().default(500),
-  MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(100),
+  MAX_ARTIST_UPDATES_PER_DAY: z.coerce.number().int().nonnegative().default(50000),
+  MAX_PLAYLIST_SCANS_PER_DAY: z.coerce.number().int().nonnegative().default(800),
+  MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(160),
 
-  MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(1300),
-  MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(65),
-  MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(13),
+  MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(2500),
+  MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(100),
+  MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(20),
 
   BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(3),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
