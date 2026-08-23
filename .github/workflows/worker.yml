@@ -17,7 +17,7 @@ concurrency:
 jobs:
   worker:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 180
 
     steps:
       - name: Checkout repository
@@ -54,14 +54,19 @@ jobs:
           MAX_PLAYLIST_SCANS_PER_RUN: '100'
           MAX_DISCOVERY_QUERIES_PER_RUN: '20'
 
-          BROWSER_CONCURRENCY: '3'
+          # Four browser lanes add headroom while the existing randomized delay
+          # and retry/backoff logic continue to protect Spotify from bursts.
+          BROWSER_CONCURRENCY: '4'
           REQUEST_DELAY_MS: '2200'
           REQUEST_JITTER_MS: '1200'
           PAGE_TIMEOUT_MS: '45000'
           PAGE_SETTLE_MS: '4500'
           MAX_RETRIES: '3'
           RETRY_BASE_DELAY_MS: '5000'
-          MAX_RUNTIME_MINUTES: '325'
+          # Finish before the next 3-hour schedule instead of letting runs queue.
+          MAX_RUNTIME_MINUTES: '170'
+          ANOMALY_RECHECK_RATIO: '1.5'
+          ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
 
           MIN_MONTHLY_LISTENERS: '10000'
           ACTIVE_RECHECK_HOURS: '24'
@@ -69,5 +74,5 @@ jobs:
           PLAYLIST_RESCAN_DAYS: '7'
 
           WORKER_NAME: spotify-production-worker-v4
-          LOCK_TTL_MINUTES: '340'
+          LOCK_TTL_MINUTES: '175'
         run: npm run worker
