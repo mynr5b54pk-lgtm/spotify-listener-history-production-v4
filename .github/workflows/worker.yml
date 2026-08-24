@@ -2,14 +2,19 @@ name: Spotify production worker v4
 
 on:
   workflow_dispatch:
-  # A worker configuration change on main should also exercise the real worker
-  # immediately instead of waiting for the next scheduled slot. The DB lock
-  # and quota accounting still prevent duplicate work.
+  # A worker configuration or implementation change on main should also exercise
+  # the real worker immediately instead of waiting for the next scheduled slot.
+  # The DB lock and quota accounting still prevent duplicate work.
   push:
     branches:
       - main
     paths:
       - '.github/workflows/worker.yml'
+      - 'src/worker/**'
+      - 'src/lib/db.js'
+      - 'src/lib/config.js'
+      - 'src/lib/spotify.js'
+      - 'src/lib/repairs.js'
   schedule:
     # Keep the 3-hour cadence but use an uncommon minute to avoid the busiest
     # scheduler boundaries and force GitHub to register the schedule afresh.
