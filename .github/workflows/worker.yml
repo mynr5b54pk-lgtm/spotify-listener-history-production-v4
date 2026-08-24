@@ -2,17 +2,19 @@ name: Spotify production worker v4
 
 on:
   workflow_dispatch:
-  # A worker configuration change on main should also exercise the real worker
-  # immediately instead of waiting for the next scheduled slot. The DB lock
-  # and quota accounting still prevent duplicate work.
   push:
     branches:
       - main
     paths:
       - '.github/workflows/worker.yml'
+      - 'src/worker/**'
+      - 'src/lib/db.js'
+      - 'src/lib/config.js'
+      - 'src/lib/spotify.js'
+      - 'src/lib/repairs.js'
+      - 'src/lib/lifecycle.js'
+      - 'sql/015_worker_lifecycle_hardening.sql'
   schedule:
-    # Keep the 3-hour cadence but use an uncommon minute to avoid the busiest
-    # scheduler boundaries and force GitHub to register the schedule afresh.
     - cron: '47 */3 * * *'
 
 permissions:
@@ -52,18 +54,12 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           HEADLESS: 'true'
-
-          # 2,500 artists x 8 scheduled runs = up to 20,000 collection attempts/day.
           MAX_ARTIST_UPDATES_PER_DAY: '50000'
           MAX_PLAYLIST_SCANS_PER_DAY: '800'
           MAX_DISCOVERY_QUERIES_PER_DAY: '160'
-
           MAX_ARTIST_UPDATES_PER_RUN: '2500'
           MAX_PLAYLIST_SCANS_PER_RUN: '100'
           MAX_DISCOVERY_QUERIES_PER_RUN: '20'
-
-          # Four browser lanes add headroom while the existing randomized delay
-          # and retry/backoff logic continue to protect Spotify from bursts.
           BROWSER_CONCURRENCY: '4'
           REQUEST_DELAY_MS: '2200'
           REQUEST_JITTER_MS: '1200'
@@ -71,16 +67,16 @@ jobs:
           PAGE_SETTLE_MS: '4500'
           MAX_RETRIES: '3'
           RETRY_BASE_DELAY_MS: '5000'
-          # Finish before the next 3-hour schedule instead of letting runs queue.
-          MAX_RUNTIME_MINUTES: '170'
+          MAX_RUNTIME_MINUTES: '155'
           ANOMALY_RECHECK_RATIO: '1.5'
           ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
-
           MIN_MONTHLY_LISTENERS: '10000'
           ACTIVE_RECHECK_HOURS: '24'
           BELOW_THRESHOLD_RECHECK_DAYS: '30'
           PLAYLIST_RESCAN_DAYS: '7'
-
           WORKER_NAME: spotify-production-worker-v4
-          LOCK_TTL_MINUTES: '175'
+          LOCK_TTL_MINUTES: '10'
+          WORKER_STALE_RUN_MINUTES: '185'
+          WORKER_HEARTBEAT_INTERVAL_MS: '60000'
+          WORKER_HEARTBEAT_STALE_MINUTES: '15'
         run: npm run worker
