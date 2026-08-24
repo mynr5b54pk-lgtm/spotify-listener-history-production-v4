@@ -2,17 +2,16 @@ name: Spotify worker watchdog
 
 on:
   workflow_dispatch:
-  # A watchdog configuration change on main should immediately verify that the
-  # scheduler/fallback path can execute, rather than waiting for the next hour.
   push:
     branches:
       - main
     paths:
       - '.github/workflows/worker-watchdog.yml'
+      - 'src/worker/check-stale.js'
+      - 'src/lib/lifecycle.js'
+      - 'src/lib/config.js'
+      - 'sql/015_worker_lifecycle_hardening.sql'
   schedule:
-    # Independent fallback schedule. It is lightweight unless the primary worker
-    # has failed to start for four hours. The uncommon minute also helps GitHub
-    # re-register the schedule after workflow changes.
     - cron: '17 * * * *'
 
 permissions:
@@ -50,6 +49,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           WORKER_STALE_HOURS: '4'
+          WORKER_STALE_RUN_MINUTES: '185'
+          WORKER_HEARTBEAT_STALE_MINUTES: '15'
         run: node src/worker/check-stale.js
 
       - name: Install Chromium for fallback
@@ -77,7 +78,7 @@ jobs:
           PAGE_SETTLE_MS: '4500'
           MAX_RETRIES: '3'
           RETRY_BASE_DELAY_MS: '5000'
-          MAX_RUNTIME_MINUTES: '170'
+          MAX_RUNTIME_MINUTES: '155'
           ANOMALY_RECHECK_RATIO: '1.5'
           ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
           MIN_MONTHLY_LISTENERS: '10000'
@@ -85,6 +86,8 @@ jobs:
           BELOW_THRESHOLD_RECHECK_DAYS: '30'
           PLAYLIST_RESCAN_DAYS: '7'
           WORKER_NAME: spotify-production-worker-v4
-          LOCK_TTL_MINUTES: '175'
-        # This fallback also validates quota RPC compatibility after DB migrations.
+          LOCK_TTL_MINUTES: '10'
+          WORKER_STALE_RUN_MINUTES: '185'
+          WORKER_HEARTBEAT_INTERVAL_MS: '60000'
+          WORKER_HEARTBEAT_STALE_MINUTES: '15'
         run: npm run worker
