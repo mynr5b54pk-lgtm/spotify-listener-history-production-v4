@@ -20,7 +20,7 @@ const schema = z.object({
   MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(100),
   MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(20),
 
-  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(4),
+  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(8),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
   REQUEST_JITTER_MS: z.coerce.number().int().nonnegative().default(1200),
   PAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
