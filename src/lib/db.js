@@ -254,15 +254,39 @@ async function getDueArtists(limit) {
   if (limit <= 0) return [];
   const deadline = new Date().toISOString();
   const selected = [];
+  const selectedIds = new Set();
 
-  // Keep the core product strict: due active artists can never be displaced by
-  // never-successful retry candidates. New discovery and low-listener rechecks
-  // only use capacity that remains after existing public artists.
-  for (const statuses of [["active"], ["error"], ["candidate"], ["below_threshold"]]) {
+  async function append(statuses, requested) {
+    const remaining = limit - selected.length;
+    if (remaining <= 0 || requested <= 0) return;
+    const rows = await fetchDueArtistsByStatuses(statuses, Math.min(requested, remaining), deadline);
+    for (const row of rows) {
+      if (selectedIds.has(row.id)) continue;
+      selected.push(row);
+      selectedIds.add(row.id);
+    }
+  }
+
+  // A full run currently completes roughly 380 artist pages. Reserve only a
+  // small, bounded slice for new candidates and low-listener rechecks so those
+  // queues make progress without pushing the public refresh cycle past ~6 days.
+  await append(["error", "candidate"], config.MAX_CANDIDATE_UPDATES_PER_RUN);
+  await append(["below_threshold"], config.MAX_BELOW_THRESHOLD_UPDATES_PER_RUN);
+  await append(["active"], limit - selected.length);
+
+  // If there are fewer active artists due, use the remaining capacity instead
+  // of leaving it idle. Filtering IDs keeps this safe when the reserve already
+  // selected the oldest rows.
+  for (const statuses of [["error", "candidate"], ["below_threshold"]]) {
     const remaining = limit - selected.length;
     if (remaining <= 0) break;
-    const rows = await fetchDueArtistsByStatuses(statuses, remaining, deadline);
-    selected.push(...rows);
+    const rows = await fetchDueArtistsByStatuses(statuses, remaining + selectedIds.size, deadline);
+    for (const row of rows) {
+      if (selected.length >= limit) break;
+      if (selectedIds.has(row.id)) continue;
+      selected.push(row);
+      selectedIds.add(row.id);
+    }
   }
 
   return selected;

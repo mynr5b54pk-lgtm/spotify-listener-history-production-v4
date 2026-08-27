@@ -19,6 +19,8 @@ const schema = z.object({
   MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(2500),
   MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(6),
   MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(2),
+  MAX_CANDIDATE_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(10),
+  MAX_BELOW_THRESHOLD_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(2),
 
   BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(8),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
