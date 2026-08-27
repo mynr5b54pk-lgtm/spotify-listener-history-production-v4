@@ -17,8 +17,8 @@ const schema = z.object({
   MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(160),
 
   MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(2500),
-  MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(100),
-  MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(20),
+  MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(6),
+  MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(2),
 
   BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(8),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
@@ -36,7 +36,7 @@ const schema = z.object({
   WORKER_HEARTBEAT_STALE_MINUTES: z.coerce.number().int().min(2).max(60).default(15),
 
   MIN_MONTHLY_LISTENERS: z.coerce.number().int().nonnegative().default(10000),
-  ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(48),
+  ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(120),
   BELOW_THRESHOLD_RECHECK_DAYS: z.coerce.number().int().positive().default(30),
   PLAYLIST_RESCAN_DAYS: z.coerce.number().int().positive().default(7),
 

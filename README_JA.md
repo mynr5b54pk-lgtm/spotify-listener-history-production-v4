@@ -5,11 +5,11 @@ Spotifyのアーティスト探索、プレイリスト巡回、月間リスナ�
 ## 現在の本番仕様
 
 - GitHub Actions: 3時間ごとに起動
-- アクティブアーティスト: 原則24時間ごとに再取得
+- アクティブアーティスト: 実処理能力に合わせて原則120時間（5日）後に再取得対象へ戻し、全体を約5〜6日で一巡
 - 1万人未満: 30日ごとに再確認
 - 履歴: 1アーティストにつきUTC日ごとに1点。1日に複数回成功した場合はその日の最新値へ更新
 - 収集優先順位: `active` → 未成功の`error`再試行 → `candidate` → `below_threshold`
-- ワーカー内の処理順: 月間リスナー収集を最優先し、その後にプレイリスト巡回・新規探索を実行
+- ワーカー内の処理順: 新規探索2検索語 → プレイリスト巡回6件 → 月間リスナー収集。少量の探索枠を先に確保し、既存データの更新能力をほぼ維持
 - 取得失敗: 指数バックオフで再試行。既に公開済みのアーティストは一時的な取得失敗だけでは公開状態から外さない
 - 異常値: 前回比3倍超/3分の1未満の値は再読み込みで一致確認してから保存
 - プレイリスト: 7日ごとに再巡回
@@ -23,8 +23,8 @@ Spotifyのアーティスト探索、プレイリスト巡回、月間リスナ�
 GitHub Actionsの1回あたり設定:
 
 - アーティスト更新: 2,500件
-- プレイリスト巡回: 100件
-- Spotify検索: 20検索語
+- プレイリスト巡回: 6件
+- Spotify検索: 2検索語
 
 1日あたりの安全上限:
 
@@ -51,6 +51,11 @@ sql/009_artist_identity_integrity.sql
 sql/010_search_performance.sql
 sql/011_scalability_cleanup.sql
 sql/012_micro_integrity_hardening.sql
+sql/013_fix_reserve_run_quota_ambiguity.sql
+sql/014_multilingual_search_aliases.sql
+sql/015_worker_lifecycle_hardening.sql
+sql/016_active_48_hour_cadence.sql
+sql/017_operational_balance_and_security.sql
 ```
 
 ## ローカル実行

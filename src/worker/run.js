@@ -81,11 +81,17 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
     const deadline = deadlineFromMinutes(config.MAX_RUNTIME_MINUTES);
     logger.info({ quota, deadline: new Date(deadline).toISOString() }, "worker started");
 
-    const collect = await collectArtists(quota.artistAllowed, deadline, runToken);
-    usage.artistAttempted = collect.completed + collect.failures;
-    usage.artistCompleted = collect.completed;
-    stats.artistUpdatesCompleted = collect.completed;
-    stats.failedJobs += collect.failures;
+    // Discovery used to run after the large artist queue and was starved on
+    // every full-length run. Keep these quotas deliberately small and execute
+    // them first, so coverage can grow without materially slowing refreshes.
+    if (!isPastDeadline(deadline)) {
+      const discovery = await discoverPlaylists(quota.discoveryAllowed, deadline, runToken);
+      usage.discoveryAttempted = discovery.completed + discovery.failures;
+      usage.discoveryCompleted = discovery.completed;
+      stats.discoveryQueriesCompleted = discovery.completed;
+      stats.discoveredPlaylists = discovery.discoveredPlaylists;
+      stats.failedJobs += discovery.failures;
+    }
 
     if (!isPastDeadline(deadline)) {
       const scan = await scanPlaylists(quota.playlistAllowed, deadline, runToken);
@@ -94,17 +100,16 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
       stats.playlistScansCompleted = scan.completed;
       stats.discoveredArtists = scan.discoveredArtists;
       stats.failedJobs += scan.failures;
-    } else {
-      stats.notes = "runtime budget exhausted after artist collection; discovery deferred";
     }
 
     if (!isPastDeadline(deadline)) {
-      const discovery = await discoverPlaylists(quota.discoveryAllowed, deadline, runToken);
-      usage.discoveryAttempted = discovery.completed + discovery.failures;
-      usage.discoveryCompleted = discovery.completed;
-      stats.discoveryQueriesCompleted = discovery.completed;
-      stats.discoveredPlaylists = discovery.discoveredPlaylists;
-      stats.failedJobs += discovery.failures;
+      const collect = await collectArtists(quota.artistAllowed, deadline, runToken);
+      usage.artistAttempted = collect.completed + collect.failures;
+      usage.artistCompleted = collect.completed;
+      stats.artistUpdatesCompleted = collect.completed;
+      stats.failedJobs += collect.failures;
+    } else {
+      stats.notes = "runtime budget exhausted before artist collection";
     }
 
     stats.durationSeconds = Math.round((Date.now() - started) / 1000);
