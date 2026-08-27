@@ -56,6 +56,7 @@ sql/014_multilingual_search_aliases.sql
 sql/015_worker_lifecycle_hardening.sql
 sql/016_active_48_hour_cadence.sql
 sql/017_operational_balance_and_security.sql
+sql/018_stale_run_reconciliation.sql
 ```
 
 ## ローカル実行

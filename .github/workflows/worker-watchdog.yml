@@ -49,7 +49,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           WORKER_STALE_HOURS: '4'
-          WORKER_STALE_RUN_MINUTES: '185'
+          WORKER_STALE_RUN_MINUTES: '20'
           WORKER_HEARTBEAT_STALE_MINUTES: '15'
         run: node src/worker/check-stale.js
 
@@ -87,7 +87,7 @@ jobs:
           PLAYLIST_RESCAN_DAYS: '7'
           WORKER_NAME: spotify-production-worker-v4
           LOCK_TTL_MINUTES: '10'
-          WORKER_STALE_RUN_MINUTES: '185'
+          WORKER_STALE_RUN_MINUTES: '20'
           WORKER_HEARTBEAT_INTERVAL_MS: '60000'
           WORKER_HEARTBEAT_STALE_MINUTES: '15'
         run: npm run worker

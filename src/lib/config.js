@@ -31,7 +31,7 @@ const schema = z.object({
   ANOMALY_RECHECK_RATIO: z.coerce.number().min(1.05).max(10).default(1.5),
   ANOMALY_CONFIRM_TOLERANCE_PERCENT: z.coerce.number().min(0.1).max(10).default(1),
   WORKER_STALE_HOURS: z.coerce.number().min(1).max(24).default(4),
-  WORKER_STALE_RUN_MINUTES: z.coerce.number().int().min(30).max(720).default(185),
+  WORKER_STALE_RUN_MINUTES: z.coerce.number().int().min(15).max(720).default(20),
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(10000).default(60000),
   WORKER_HEARTBEAT_STALE_MINUTES: z.coerce.number().int().min(2).max(60).default(15),
 
