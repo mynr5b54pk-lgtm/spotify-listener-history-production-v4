@@ -49,6 +49,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           WORKER_STALE_HOURS: '4'
+          WORKER_RESTART_DELAY_MINUTES: '15'
           WORKER_STALE_RUN_MINUTES: '20'
           WORKER_HEARTBEAT_STALE_MINUTES: '15'
         run: node src/worker/check-stale.js
@@ -73,7 +74,7 @@ jobs:
           MAX_DISCOVERY_QUERIES_PER_RUN: '2'
           MAX_CANDIDATE_UPDATES_PER_RUN: '10'
           MAX_BELOW_THRESHOLD_UPDATES_PER_RUN: '2'
-          BROWSER_CONCURRENCY: '4'
+          BROWSER_CONCURRENCY: '10'
           REQUEST_DELAY_MS: '2200'
           REQUEST_JITTER_MS: '1200'
           PAGE_TIMEOUT_MS: '45000'
