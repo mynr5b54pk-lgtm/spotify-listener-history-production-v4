@@ -22,7 +22,7 @@ const schema = z.object({
   MAX_CANDIDATE_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(10),
   MAX_BELOW_THRESHOLD_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(2),
 
-  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(8),
+  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(10),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
   REQUEST_JITTER_MS: z.coerce.number().int().nonnegative().default(1200),
   PAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
@@ -33,6 +33,7 @@ const schema = z.object({
   ANOMALY_RECHECK_RATIO: z.coerce.number().min(1.05).max(10).default(1.5),
   ANOMALY_CONFIRM_TOLERANCE_PERCENT: z.coerce.number().min(0.1).max(10).default(1),
   WORKER_STALE_HOURS: z.coerce.number().min(1).max(24).default(4),
+  WORKER_RESTART_DELAY_MINUTES: z.coerce.number().int().min(5).max(120).default(15),
   WORKER_STALE_RUN_MINUTES: z.coerce.number().int().min(15).max(720).default(20),
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(10000).default(60000),
   WORKER_HEARTBEAT_STALE_MINUTES: z.coerce.number().int().min(2).max(60).default(15),
