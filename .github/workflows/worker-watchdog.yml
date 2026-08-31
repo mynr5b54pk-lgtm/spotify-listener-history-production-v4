@@ -19,7 +19,8 @@ permissions:
 
 concurrency:
   group: spotify-worker-watchdog
-  cancel-in-progress: true
+  # A fallback run can last 155 minutes; hourly checks must not cancel it.
+  cancel-in-progress: false
 
 jobs:
   watchdog:
