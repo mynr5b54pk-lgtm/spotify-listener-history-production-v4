@@ -54,6 +54,7 @@ async function createRun(runToken, quota) {
     .from("worker_runs")
     .insert({
       run_token: runToken,
+      usage_date: quota.usageDate,
       artist_updates_reserved: quota.artistAllowed,
       playlist_scans_reserved: quota.playlistAllowed,
       discovery_queries_reserved: quota.discoveryAllowed
@@ -63,7 +64,7 @@ async function createRun(runToken, quota) {
   return ensure(data, error, "create run").id;
 }
 
-async function finishRun(runId, stats, status) {
+async function finishRun(runId, stats, status, quotaFinalized = false) {
   const { error } = await supabase
     .from("worker_runs")
     .update({
@@ -76,7 +77,8 @@ async function finishRun(runId, stats, status) {
       discovered_artists: stats.discoveredArtists,
       failed_jobs: stats.failedJobs,
       duration_seconds: stats.durationSeconds,
-      notes: stats.notes || null
+      notes: stats.notes || null,
+      quota_finalized: quotaFinalized
     })
     .eq("id", runId);
   ensure(null, error, "finish run");
