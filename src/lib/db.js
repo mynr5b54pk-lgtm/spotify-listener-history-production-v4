@@ -54,6 +54,7 @@ async function createRun(runToken, quota) {
     .from("worker_runs")
     .insert({
       run_token: runToken,
+      usage_date: quota.usageDate,
       artist_updates_reserved: quota.artistAllowed,
       playlist_scans_reserved: quota.playlistAllowed,
       discovery_queries_reserved: quota.discoveryAllowed
@@ -63,7 +64,7 @@ async function createRun(runToken, quota) {
   return ensure(data, error, "create run").id;
 }
 
-async function finishRun(runId, stats, status) {
+async function finishRun(runId, stats, status, quotaFinalized = false) {
   const { error } = await supabase
     .from("worker_runs")
     .update({
@@ -76,7 +77,8 @@ async function finishRun(runId, stats, status) {
       discovered_artists: stats.discoveredArtists,
       failed_jobs: stats.failedJobs,
       duration_seconds: stats.durationSeconds,
-      notes: stats.notes || null
+      notes: stats.notes || null,
+      quota_finalized: quotaFinalized
     })
     .eq("id", runId);
   ensure(null, error, "finish run");
@@ -267,9 +269,9 @@ async function getDueArtists(limit) {
     }
   }
 
-  // A full run currently completes roughly 380 artist pages. Reserve only a
-  // small, bounded slice for new candidates and low-listener rechecks so those
-  // queues make progress without pushing the public refresh cycle past ~6 days.
+  // A 325-minute run completes about 975 artist pages. Reserve bounded slices
+  // for never-checked candidates and below-threshold rechecks, then use the
+  // remaining capacity for public artists so the active cycle stays near 5–6 days.
   await append(["error", "candidate"], config.MAX_CANDIDATE_UPDATES_PER_RUN);
   await append(["below_threshold"], config.MAX_BELOW_THRESHOLD_UPDATES_PER_RUN);
   await append(["active"], limit - selected.length);
