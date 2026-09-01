@@ -269,9 +269,9 @@ async function getDueArtists(limit) {
     }
   }
 
-  // A full run currently completes roughly 380 artist pages. Reserve only a
-  // small, bounded slice for new candidates and low-listener rechecks so those
-  // queues make progress without pushing the public refresh cycle past ~6 days.
+  // A 325-minute run completes about 975 artist pages. Reserve bounded slices
+  // for never-checked candidates and below-threshold rechecks, then use the
+  // remaining capacity for public artists so the active cycle stays near 5–6 days.
   await append(["error", "candidate"], config.MAX_CANDIDATE_UPDATES_PER_RUN);
   await append(["below_threshold"], config.MAX_BELOW_THRESHOLD_UPDATES_PER_RUN);
   await append(["active"], limit - selected.length);
