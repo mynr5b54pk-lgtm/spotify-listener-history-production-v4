@@ -15,7 +15,9 @@ on:
       - 'src/lib/lifecycle.js'
       - 'sql/015_worker_lifecycle_hardening.sql'
   schedule:
-    - cron: '47 */3 * * *'
+    # Queue an hourly run. With cancel-in-progress disabled, a pending run starts
+    # promptly after the current collector exits instead of leaving multi-hour gaps.
+    - cron: '47 * * * *'
 
 permissions:
   contents: read
@@ -27,7 +29,7 @@ concurrency:
 jobs:
   worker:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 350
 
     steps:
       - name: Checkout repository
@@ -69,7 +71,7 @@ jobs:
           PAGE_SETTLE_MS: '4500'
           MAX_RETRIES: '3'
           RETRY_BASE_DELAY_MS: '5000'
-          MAX_RUNTIME_MINUTES: '155'
+          MAX_RUNTIME_MINUTES: '325'
           ANOMALY_RECHECK_RATIO: '1.5'
           ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
           MIN_MONTHLY_LISTENERS: '10000'
