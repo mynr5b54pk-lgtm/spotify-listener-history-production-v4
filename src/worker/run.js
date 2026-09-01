@@ -121,7 +121,7 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
         ? "partial"
         : "failed";
 
-    await finishRun(runId, stats, status);
+    await finishRun(runId, stats, status, quotaFinalized);
     logger.info({ stats, usage, status }, "worker finished");
   } catch (error) {
     stats.durationSeconds = Math.round((Date.now() - started) / 1000);
@@ -133,7 +133,7 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
     }
 
     if (runId) {
-      try { await finishRun(runId, stats, "failed"); } catch (finishError) {
+      try { await finishRun(runId, stats, "failed", quotaFinalized); } catch (finishError) {
         logger.error({ err: finishError }, "failed to save worker failure");
       }
     }
