@@ -102,8 +102,10 @@ async function collectOne(browser, artist, deadline, runToken) {
   }
 }
 
-async function collectArtists(limit, deadline, runToken) {
-  const priorityRepairs = await getPriorityRepairArtists(limit);
+async function collectArtists(limit, deadline, runToken, onProgress) {
+  const priorityRepairs = config.ARTIST_COLLECTION_MODE === "candidates_only"
+    ? []
+    : await getPriorityRepairArtists(limit);
   const remaining = Math.max(0, limit - priorityRepairs.length);
   const regularArtists = await getDueArtists(remaining);
   const repairIds = new Set(priorityRepairs.map((artist) => artist.id));
@@ -117,10 +119,17 @@ async function collectArtists(limit, deadline, runToken) {
   const browser = await launchBrowser();
 
   try {
+    const progress = { completed: 0, failures: 0 };
     const results = await mapLimit(
       artists,
       config.BROWSER_CONCURRENCY,
-      (artist) => collectOne(browser, artist, deadline, runToken)
+      async (artist) => {
+        const result = await collectOne(browser, artist, deadline, runToken);
+        progress.completed += result?.completed || 0;
+        progress.failures += result?.failures || 0;
+        onProgress?.({ ...progress });
+        return result;
+      }
     );
 
     return results.reduce((acc, item) => ({

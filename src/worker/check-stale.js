@@ -8,7 +8,8 @@ const { reconcileStaleRuns } = require("../lib/lifecycle");
 
   const { data, error } = await supabase
     .from("worker_runs")
-    .select("id,status,started_at,finished_at,last_heartbeat_at")
+    .select("id,worker_name,status,started_at,finished_at,last_heartbeat_at")
+    .eq("worker_name", config.WORKER_NAME)
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();

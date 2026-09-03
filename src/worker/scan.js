@@ -72,7 +72,7 @@ async function scanOne(browser, playlist, deadline, runToken) {
   }
 }
 
-async function scanPlaylists(limit, deadline, runToken) {
+async function scanPlaylists(limit, deadline, runToken, onProgress) {
   const playlists = await getDuePlaylists(limit);
   if (!playlists.length) {
     return { completed: 0, discoveredArtists: 0, failures: 0 };
@@ -81,10 +81,18 @@ async function scanPlaylists(limit, deadline, runToken) {
   const browser = await launchBrowser();
 
   try {
+    const progress = { completed: 0, discoveredArtists: 0, failures: 0 };
     const results = await mapLimit(
       playlists,
       config.BROWSER_CONCURRENCY,
-      (playlist) => scanOne(browser, playlist, deadline, runToken)
+      async (playlist) => {
+        const result = await scanOne(browser, playlist, deadline, runToken);
+        progress.completed += result?.completed || 0;
+        progress.discoveredArtists += result?.discoveredArtists || 0;
+        progress.failures += result?.failures || 0;
+        onProgress?.({ ...progress });
+        return result;
+      }
     );
 
     return results.reduce((acc, item) => ({

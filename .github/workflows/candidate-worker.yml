@@ -1,4 +1,4 @@
-name: Spotify discovery worker v4
+name: Spotify candidate verification worker v4
 
 on:
   workflow_dispatch:
@@ -6,26 +6,27 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/discovery-worker.yml'
+      - '.github/workflows/candidate-worker.yml'
       - 'src/worker/**'
       - 'src/lib/db.js'
       - 'src/lib/config.js'
       - 'src/lib/spotify.js'
+      - 'src/lib/lifecycle.js'
       - 'sql/**'
   schedule:
-    - cron: '7 */6 * * *'
+    - cron: '27 * * * *'
 
 permissions:
   contents: read
 
 concurrency:
-  group: spotify-discovery-worker-v4
+  group: spotify-candidate-worker-v4
   cancel-in-progress: false
 
 jobs:
-  discover:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 350
 
     steps:
       - name: Checkout repository
@@ -45,7 +46,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run discovery worker
+      - name: Verify candidate artists
         env:
           NODE_ENV: production
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -55,28 +56,28 @@ jobs:
           MAX_ARTIST_UPDATES_PER_DAY: '50000'
           MAX_PLAYLIST_SCANS_PER_DAY: '800'
           MAX_DISCOVERY_QUERIES_PER_DAY: '160'
-          MAX_ARTIST_UPDATES_PER_RUN: '0'
-          MAX_PLAYLIST_SCANS_PER_RUN: '150'
-          MAX_DISCOVERY_QUERIES_PER_RUN: '22'
-          MAX_CANDIDATE_UPDATES_PER_RUN: '0'
+          MAX_ARTIST_UPDATES_PER_RUN: '2500'
+          MAX_PLAYLIST_SCANS_PER_RUN: '0'
+          MAX_DISCOVERY_QUERIES_PER_RUN: '0'
+          MAX_CANDIDATE_UPDATES_PER_RUN: '2500'
           ARTIST_COLLECTION_MODE: candidates_only
           MAX_PLAYLIST_ACTIVE_POOL: '2000'
           CANDIDATE_QUEUE_HIGH_WATERMARK: '5000'
           BACKLOGGED_PLAYLIST_SCANS_PER_RUN: '60'
-          BROWSER_CONCURRENCY: '2'
-          REQUEST_DELAY_MS: '2600'
-          REQUEST_JITTER_MS: '1600'
+          BROWSER_CONCURRENCY: '10'
+          REQUEST_DELAY_MS: '2200'
+          REQUEST_JITTER_MS: '1200'
           PAGE_TIMEOUT_MS: '45000'
           PAGE_SETTLE_MS: '4500'
           MAX_RETRIES: '3'
           RETRY_BASE_DELAY_MS: '5000'
-          MAX_RUNTIME_MINUTES: '90'
+          MAX_RUNTIME_MINUTES: '325'
           ANOMALY_RECHECK_RATIO: '1.5'
           ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
           MIN_MONTHLY_LISTENERS: '10000'
           ACTIVE_RECHECK_HOURS: '120'
           PLAYLIST_RESCAN_DAYS: '7'
-          WORKER_NAME: spotify-discovery-worker-v4
+          WORKER_NAME: spotify-candidate-worker-v4
           LOCK_TTL_MINUTES: '10'
           WORKER_STALE_RUN_MINUTES: '20'
           WORKER_HEARTBEAT_INTERVAL_MS: '60000'

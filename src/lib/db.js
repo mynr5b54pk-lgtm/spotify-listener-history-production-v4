@@ -55,6 +55,7 @@ async function createRun(runToken, quota) {
     .from("worker_runs")
     .insert({
       run_token: runToken,
+      worker_name: config.WORKER_NAME,
       usage_date: quota.usageDate,
       artist_updates_reserved: quota.artistAllowed,
       playlist_scans_reserved: quota.playlistAllowed,
@@ -63,6 +64,24 @@ async function createRun(runToken, quota) {
     .select("id")
     .single();
   return ensure(data, error, "create run").id;
+}
+
+async function updateRunProgress(runId, runToken, stats, startedAtMs) {
+  const { error } = await supabase
+    .from("worker_runs")
+    .update({
+      artist_updates_completed: stats.artistUpdatesCompleted,
+      playlist_scans_completed: stats.playlistScansCompleted,
+      discovery_queries_completed: stats.discoveryQueriesCompleted,
+      discovered_playlists: stats.discoveredPlaylists,
+      discovered_artists: stats.discoveredArtists,
+      failed_jobs: stats.failedJobs,
+      duration_seconds: Math.round((Date.now() - startedAtMs) / 1000)
+    })
+    .eq("id", runId)
+    .eq("run_token", runToken)
+    .eq("status", "running");
+  ensure(null, error, "update run progress");
 }
 
 async function finishRun(runId, stats, status, quotaFinalized = false) {
@@ -160,6 +179,16 @@ async function getDuePlaylists(limit) {
     .order("id", { ascending: true })
     .limit(limit);
   return ensure(data, error, "get playlists") || [];
+}
+
+async function getCandidateQueueSize() {
+  const { count, error } = await supabase
+    .from("artists")
+    .select("id", { count: "exact", head: true })
+    .eq("tracking_enabled", true)
+    .in("discovery_status", ["candidate", "error"]);
+  ensure(null, error, "get candidate queue size");
+  return Number(count || 0);
 }
 
 async function upsertArtist(item) {
@@ -263,7 +292,10 @@ async function getDueArtists(limit) {
     return fetchDueArtistsByStatuses(["active"], limit, deadline);
   }
   if (config.ARTIST_COLLECTION_MODE === "candidates_only") {
-    return fetchDueArtistsByStatuses(["error", "candidate"], limit, deadline);
+    const errors = await fetchDueArtistsByStatuses(["error"], limit, deadline);
+    if (errors.length >= limit) return errors;
+    const candidates = await fetchDueArtistsByStatuses(["candidate"], limit - errors.length, deadline);
+    return [...errors, ...candidates];
   }
 
   const selected = [];
@@ -282,13 +314,14 @@ async function getDueArtists(limit) {
 
   // Balanced mode is useful for local/manual runs. Production uses separate
   // active and discovery workers so neither queue can starve the other.
-  await append(["error", "candidate"], config.MAX_CANDIDATE_UPDATES_PER_RUN);
+  await append(["error"], config.MAX_CANDIDATE_UPDATES_PER_RUN);
+  await append(["candidate"], config.MAX_CANDIDATE_UPDATES_PER_RUN);
   await append(["active"], limit - selected.length);
 
   // If there are fewer active artists due, use the remaining capacity instead
   // of leaving it idle. Filtering IDs keeps this safe when the reserve already
   // selected the oldest rows.
-  for (const statuses of [["error", "candidate"]]) {
+  for (const statuses of [["error"], ["candidate"]]) {
     const remaining = limit - selected.length;
     if (remaining <= 0) break;
     const rows = await fetchDueArtistsByStatuses(statuses, remaining + selectedIds.size, deadline);
@@ -446,6 +479,7 @@ module.exports = {
   acquireLock,
   releaseLock,
   createRun,
+  updateRunProgress,
   finishRun,
   logJobError,
   saveArtistAlias,
@@ -455,6 +489,7 @@ module.exports = {
   markDiscoveryFailure,
   upsertPlaylist,
   getDuePlaylists,
+  getCandidateQueueSize,
   upsertArtist,
   linkPlaylistArtist,
   savePlaylistSuccess,

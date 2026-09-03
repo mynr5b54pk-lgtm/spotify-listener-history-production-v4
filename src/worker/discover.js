@@ -43,7 +43,7 @@ function assertPlaylistSearchPage(page) {
   }
 }
 
-async function discoverPlaylists(limit, deadline, runToken) {
+async function discoverPlaylists(limit, deadline, runToken, onProgress) {
   await seedDiscoveryQueries(loadSeedQueries());
 
   const queries = await getDueDiscoveryQueries(limit);
@@ -100,6 +100,7 @@ async function discoverPlaylists(limit, deadline, runToken) {
       }
 
       await sleep(randomDelay(config.REQUEST_DELAY_MS, config.REQUEST_JITTER_MS));
+      onProgress?.({ completed, discoveredPlaylists, failures });
     }
 
     await context.close();

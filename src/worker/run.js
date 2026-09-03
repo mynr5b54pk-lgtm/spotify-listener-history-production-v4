@@ -4,6 +4,8 @@ const {
   acquireLock,
   releaseLock,
   createRun,
+  updateRunProgress,
+  getCandidateQueueSize,
   finishRun
 } = require("../lib/db");
 const { reserveRunQuota, finalizeRunQuota } = require("../lib/quota");
@@ -55,6 +57,7 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
     try {
       const ok = await heartbeatRun(runId, runToken);
       if (!ok) logger.error({ runId }, "worker heartbeat lost lock ownership");
+      else await updateRunProgress(runId, runToken, stats, started);
     } catch (error) {
       logger.error({ err: error, runId }, "worker heartbeat failed");
     } finally {
@@ -85,7 +88,12 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
     // every full-length run. Keep these quotas deliberately small and execute
     // them first, so coverage can grow without materially slowing refreshes.
     if (!isPastDeadline(deadline)) {
-      const discovery = await discoverPlaylists(quota.discoveryAllowed, deadline, runToken);
+      const failuresBeforeDiscovery = stats.failedJobs;
+      const discovery = await discoverPlaylists(quota.discoveryAllowed, deadline, runToken, (progress) => {
+        stats.discoveryQueriesCompleted = progress.completed;
+        stats.discoveredPlaylists = progress.discoveredPlaylists;
+        stats.failedJobs = failuresBeforeDiscovery + progress.failures;
+      });
       usage.discoveryAttempted = discovery.completed + discovery.failures;
       usage.discoveryCompleted = discovery.completed;
       stats.discoveryQueriesCompleted = discovery.completed;
@@ -94,7 +102,20 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
     }
 
     if (!isPastDeadline(deadline)) {
-      const scan = await scanPlaylists(quota.playlistAllowed, deadline, runToken);
+      let scanLimit = quota.playlistAllowed;
+      if (scanLimit > config.BACKLOGGED_PLAYLIST_SCANS_PER_RUN) {
+        const candidateQueueSize = await getCandidateQueueSize();
+        if (candidateQueueSize >= config.CANDIDATE_QUEUE_HIGH_WATERMARK) {
+          scanLimit = config.BACKLOGGED_PLAYLIST_SCANS_PER_RUN;
+          logger.warn({ candidateQueueSize, scanLimit }, "candidate backlog high; throttling playlist scans");
+        }
+      }
+      const failuresBeforeScan = stats.failedJobs;
+      const scan = await scanPlaylists(scanLimit, deadline, runToken, (progress) => {
+        stats.playlistScansCompleted = progress.completed;
+        stats.discoveredArtists = progress.discoveredArtists;
+        stats.failedJobs = failuresBeforeScan + progress.failures;
+      });
       usage.playlistAttempted = scan.completed + scan.failures;
       usage.playlistCompleted = scan.completed;
       stats.playlistScansCompleted = scan.completed;
@@ -103,7 +124,11 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
     }
 
     if (!isPastDeadline(deadline)) {
-      const collect = await collectArtists(quota.artistAllowed, deadline, runToken);
+      const failuresBeforeCollect = stats.failedJobs;
+      const collect = await collectArtists(quota.artistAllowed, deadline, runToken, (progress) => {
+        stats.artistUpdatesCompleted = progress.completed;
+        stats.failedJobs = failuresBeforeCollect + progress.failures;
+      });
       usage.artistAttempted = collect.completed + collect.failures;
       usage.artistCompleted = collect.completed;
       stats.artistUpdatesCompleted = collect.completed;

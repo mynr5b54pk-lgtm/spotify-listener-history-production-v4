@@ -22,6 +22,8 @@ const schema = z.object({
   MAX_CANDIDATE_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(150),
   ARTIST_COLLECTION_MODE: z.enum(["balanced", "active_only", "candidates_only"]).default("balanced"),
   MAX_PLAYLIST_ACTIVE_POOL: z.coerce.number().int().min(100).max(10000).default(2000),
+  CANDIDATE_QUEUE_HIGH_WATERMARK: z.coerce.number().int().nonnegative().default(5000),
+  BACKLOGGED_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(60),
 
   BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(10),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),

@@ -10,7 +10,7 @@ on:
       - 'src/worker/check-stale.js'
       - 'src/lib/lifecycle.js'
       - 'src/lib/config.js'
-      - 'sql/015_worker_lifecycle_hardening.sql'
+      - 'sql/**'
   schedule:
     - cron: '17 * * * *'
 
@@ -53,6 +53,7 @@ jobs:
           WORKER_RESTART_DELAY_MINUTES: '15'
           WORKER_STALE_RUN_MINUTES: '20'
           WORKER_HEARTBEAT_STALE_MINUTES: '15'
+          WORKER_NAME: spotify-production-worker-v4
         run: node src/worker/check-stale.js
 
       - name: Install Chromium for fallback
@@ -76,6 +77,8 @@ jobs:
           MAX_CANDIDATE_UPDATES_PER_RUN: '0'
           ARTIST_COLLECTION_MODE: active_only
           MAX_PLAYLIST_ACTIVE_POOL: '2000'
+          CANDIDATE_QUEUE_HIGH_WATERMARK: '5000'
+          BACKLOGGED_PLAYLIST_SCANS_PER_RUN: '60'
           BROWSER_CONCURRENCY: '10'
           REQUEST_DELAY_MS: '2200'
           REQUEST_JITTER_MS: '1200'
