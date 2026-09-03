@@ -29,12 +29,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -71,10 +71,11 @@ jobs:
           MAX_PLAYLIST_SCANS_PER_DAY: '800'
           MAX_DISCOVERY_QUERIES_PER_DAY: '160'
           MAX_ARTIST_UPDATES_PER_RUN: '2500'
-          MAX_PLAYLIST_SCANS_PER_RUN: '6'
-          MAX_DISCOVERY_QUERIES_PER_RUN: '2'
-          MAX_CANDIDATE_UPDATES_PER_RUN: '150'
-          MAX_BELOW_THRESHOLD_UPDATES_PER_RUN: '50'
+          MAX_PLAYLIST_SCANS_PER_RUN: '0'
+          MAX_DISCOVERY_QUERIES_PER_RUN: '0'
+          MAX_CANDIDATE_UPDATES_PER_RUN: '0'
+          ARTIST_COLLECTION_MODE: active_only
+          MAX_PLAYLIST_ACTIVE_POOL: '2000'
           BROWSER_CONCURRENCY: '10'
           REQUEST_DELAY_MS: '2200'
           REQUEST_JITTER_MS: '1200'
@@ -87,7 +88,6 @@ jobs:
           ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
           MIN_MONTHLY_LISTENERS: '10000'
           ACTIVE_RECHECK_HOURS: '120'
-          BELOW_THRESHOLD_RECHECK_DAYS: '30'
           PLAYLIST_RESCAN_DAYS: '7'
           WORKER_NAME: spotify-production-worker-v4
           LOCK_TTL_MINUTES: '10'

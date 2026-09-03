@@ -20,6 +20,7 @@ async function getPriorityRepairArtists(limit) {
     .from("artists")
     .select("*")
     .eq("tracking_enabled", true)
+    .eq("discovery_status", "active")
     .order("next_collect_at", { ascending: true })
     .order("id", { ascending: true })
     .limit(poolLimit);

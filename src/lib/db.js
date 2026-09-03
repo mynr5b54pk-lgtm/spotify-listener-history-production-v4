@@ -1,6 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 const config = require("./config");
 const { normalizeText } = require("./utils");
+const { shouldRetainArtist } = require("./threshold");
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -154,6 +155,7 @@ async function getDuePlaylists(limit) {
     .select("*")
     .in("scan_status", ["pending", "active", "error"])
     .lte("next_scan_at", new Date().toISOString())
+    .order("priority_score", { ascending: false })
     .order("next_scan_at", { ascending: true })
     .order("id", { ascending: true })
     .limit(limit);
@@ -200,7 +202,7 @@ async function upsertArtist(item) {
   if (incomingName && storedName !== incomingName) {
     await saveArtistAlias(artist.id, incomingName);
   }
-  return artist;
+  return { ...artist, isNew: !existing };
 }
 
 async function linkPlaylistArtist(playlistId, artistId) {
@@ -210,23 +212,24 @@ async function linkPlaylistArtist(playlistId, artistId) {
   ensure(null, error, "link playlist artist");
 }
 
-async function savePlaylistSuccess(playlist) {
-  const next = new Date();
-  next.setUTCDate(next.getUTCDate() + config.PLAYLIST_RESCAN_DAYS);
-  const { error } = await supabase
-    .from("playlists")
-    .update({ scan_status: "active", last_scanned_at: new Date().toISOString(), next_scan_at: next.toISOString(), failure_count: 0, last_error: null, updated_at: new Date().toISOString() })
-    .eq("id", playlist.id);
+async function savePlaylistSuccess(playlist, newCandidateCount) {
+  const { error } = await supabase.rpc("record_playlist_scan", {
+    p_playlist_id: playlist.id,
+    p_new_candidate_count: Math.max(0, Number(newCandidateCount || 0)),
+    p_rescan_days: config.PLAYLIST_RESCAN_DAYS,
+    p_max_active: config.MAX_PLAYLIST_ACTIVE_POOL
+  });
   ensure(null, error, "save playlist success");
 }
 
 async function savePlaylistFailure(playlist, message) {
   const failures = Number(playlist.failure_count || 0) + 1;
   const next = new Date();
-  next.setUTCHours(next.getUTCHours() + Math.min(96, failures * 6));
+  if (failures >= 3) next.setUTCDate(next.getUTCDate() + 90);
+  else next.setUTCHours(next.getUTCHours() + Math.min(96, failures * 6));
   const { error } = await supabase
     .from("playlists")
-    .update({ scan_status: "error", failure_count: failures, last_error: message.slice(0, 1000), next_scan_at: next.toISOString(), updated_at: new Date().toISOString() })
+    .update({ scan_status: failures >= 3 ? "paused" : "error", failure_count: failures, last_error: message.slice(0, 1000), next_scan_at: next.toISOString(), updated_at: new Date().toISOString() })
     .eq("id", playlist.id);
   ensure(null, error, "save playlist failure");
 }
@@ -255,6 +258,14 @@ async function fetchDueArtistsByStatuses(statuses, limit, deadline) {
 async function getDueArtists(limit) {
   if (limit <= 0) return [];
   const deadline = new Date().toISOString();
+
+  if (config.ARTIST_COLLECTION_MODE === "active_only") {
+    return fetchDueArtistsByStatuses(["active"], limit, deadline);
+  }
+  if (config.ARTIST_COLLECTION_MODE === "candidates_only") {
+    return fetchDueArtistsByStatuses(["error", "candidate"], limit, deadline);
+  }
+
   const selected = [];
   const selectedIds = new Set();
 
@@ -269,17 +280,15 @@ async function getDueArtists(limit) {
     }
   }
 
-  // A 325-minute run completes about 975 artist pages. Reserve bounded slices
-  // for never-checked candidates and below-threshold rechecks, then use the
-  // remaining capacity for public artists so the active cycle stays near 5–6 days.
+  // Balanced mode is useful for local/manual runs. Production uses separate
+  // active and discovery workers so neither queue can starve the other.
   await append(["error", "candidate"], config.MAX_CANDIDATE_UPDATES_PER_RUN);
-  await append(["below_threshold"], config.MAX_BELOW_THRESHOLD_UPDATES_PER_RUN);
   await append(["active"], limit - selected.length);
 
   // If there are fewer active artists due, use the remaining capacity instead
   // of leaving it idle. Filtering IDs keeps this safe when the reserve already
   // selected the oldest rows.
-  for (const statuses of [["error", "candidate"], ["below_threshold"]]) {
+  for (const statuses of [["error", "candidate"]]) {
     const remaining = limit - selected.length;
     if (remaining <= 0) break;
     const rows = await fetchDueArtistsByStatuses(statuses, remaining + selectedIds.size, deadline);
@@ -292,6 +301,11 @@ async function getDueArtists(limit) {
   }
 
   return selected;
+}
+
+async function deleteArtist(artistId) {
+  const { error } = await supabase.from("artists").delete().eq("id", artistId);
+  ensure(null, error, "delete below-threshold artist");
 }
 
 async function saveDailyHistory(artistId, listeners, now) {
@@ -319,10 +333,13 @@ async function saveDailyHistory(artistId, listeners, now) {
 
 async function saveArtistSuccess(artist, listeners, canonicalName = null) {
   const now = new Date();
-  const isActive = listeners >= config.MIN_MONTHLY_LISTENERS;
+  if (!shouldRetainArtist(listeners, config.MIN_MONTHLY_LISTENERS)) {
+    await deleteArtist(artist.id);
+    return { retained: false };
+  }
+
   const next = new Date(now);
-  if (isActive) next.setUTCHours(next.getUTCHours() + config.ACTIVE_RECHECK_HOURS);
-  else next.setUTCDate(next.getUTCDate() + config.BELOW_THRESHOLD_RECHECK_DAYS);
+  next.setUTCHours(next.getUTCHours() + config.ACTIVE_RECHECK_HOURS);
 
   await saveDailyHistory(artist.id, listeners, now);
 
@@ -337,13 +354,14 @@ async function saveArtistSuccess(artist, listeners, canonicalName = null) {
       monthly_listeners_latest: listeners,
       last_collected_at: now.toISOString(),
       next_collect_at: next.toISOString(),
-      discovery_status: isActive ? "active" : "below_threshold",
+      discovery_status: "active",
       failure_count: 0,
       last_error: null,
       updated_at: now.toISOString()
     })
     .eq("id", artist.id);
   ensure(null, error, "save artist success");
+  return { retained: true };
 }
 
 async function saveArtistFailure(artist, message) {
@@ -354,8 +372,8 @@ async function saveArtistFailure(artist, message) {
   // A transient scrape failure must not make a previously valid public artist
   // disappear from search/detail pages. Only never-successful candidates use
   // the error state while waiting for a retry.
-  const status = ["active", "below_threshold"].includes(artist.discovery_status)
-    ? artist.discovery_status
+  const status = artist.discovery_status === "active"
+    ? "active"
     : "error";
 
   const { error } = await supabase

@@ -15,7 +15,7 @@
     "install:browsers": "npx playwright install chromium"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

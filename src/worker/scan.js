@@ -45,14 +45,16 @@ async function scanOne(browser, playlist, deadline, runToken) {
       label: `playlist:${playlist.spotify_id}`
     });
 
+    let newCandidates = 0;
     for (const item of artists) {
       const artist = await upsertArtist(item);
+      if (artist.isNew) newCandidates += 1;
       await linkPlaylistArtist(playlist.id, artist.id);
     }
 
-    await savePlaylistSuccess(playlist);
-    logger.info({ playlist: playlist.spotify_id, artists: artists.length }, "playlist scan complete");
-    return { completed: 1, discoveredArtists: artists.length, failures: 0 };
+    await savePlaylistSuccess(playlist, newCandidates);
+    logger.info({ playlist: playlist.spotify_id, artists: artists.length, newCandidates }, "playlist scan complete");
+    return { completed: 1, discoveredArtists: newCandidates, failures: 0 };
   } catch (error) {
     await savePlaylistFailure(playlist, error.message);
     await logJobError({

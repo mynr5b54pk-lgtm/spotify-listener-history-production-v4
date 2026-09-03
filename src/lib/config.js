@@ -20,7 +20,8 @@ const schema = z.object({
   MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(6),
   MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(2),
   MAX_CANDIDATE_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(150),
-  MAX_BELOW_THRESHOLD_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(50),
+  ARTIST_COLLECTION_MODE: z.enum(["balanced", "active_only", "candidates_only"]).default("balanced"),
+  MAX_PLAYLIST_ACTIVE_POOL: z.coerce.number().int().min(100).max(10000).default(2000),
 
   BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(10),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
@@ -40,7 +41,6 @@ const schema = z.object({
 
   MIN_MONTHLY_LISTENERS: z.coerce.number().int().nonnegative().default(10000),
   ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(120),
-  BELOW_THRESHOLD_RECHECK_DAYS: z.coerce.number().int().positive().default(30),
   PLAYLIST_RESCAN_DAYS: z.coerce.number().int().positive().default(7),
 
   WORKER_NAME: z.string().default("spotify-production-worker-v4"),
