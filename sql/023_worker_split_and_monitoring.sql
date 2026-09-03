@@ -5,6 +5,8 @@ alter table public.worker_runs
 
 update public.worker_runs
 set worker_name = case
+  when coalesce(artist_updates_reserved, 0) >= 1000
+    then 'spotify-production-worker-v4'
   when coalesce(playlist_scans_reserved, 0) > 0
     or coalesce(discovery_queries_reserved, 0) > 0
     then 'spotify-discovery-worker-v4'
