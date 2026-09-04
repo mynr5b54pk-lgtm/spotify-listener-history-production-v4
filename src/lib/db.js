@@ -2,6 +2,7 @@ const { createClient } = require("@supabase/supabase-js");
 const config = require("./config");
 const { normalizeText } = require("./utils");
 const { shouldRetainArtist } = require("./threshold");
+const { splitPlaylistLimit } = require("./playlist-selection");
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -167,18 +168,55 @@ async function upsertPlaylist(item, sourceQuery) {
   return ensure(data, error, "upsert playlist");
 }
 
-async function getDuePlaylists(limit) {
+async function fetchDuePlaylists({ statuses, limit, neverScanned = false }) {
   if (limit <= 0) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from("playlists")
     .select("*")
-    .in("scan_status", ["pending", "active", "error"])
-    .lte("next_scan_at", new Date().toISOString())
+    .in("scan_status", statuses)
+    .lte("next_scan_at", new Date().toISOString());
+
+  if (neverScanned) query = query.is("last_scanned_at", null);
+
+  const { data, error } = await query
     .order("priority_score", { ascending: false })
     .order("next_scan_at", { ascending: true })
     .order("id", { ascending: true })
     .limit(limit);
   return ensure(data, error, "get playlists") || [];
+}
+
+async function getDuePlaylists(limit) {
+  if (limit <= 0) return [];
+
+  // Preserve productive playlist coverage while guaranteeing that newly
+  // discovered playlists cannot remain behind the active pool forever.
+  const { productive: productiveLimit, backfill: backfillLimit } = splitPlaylistLimit(
+    limit,
+    config.PLAYLIST_BACKFILL_PERCENT
+  );
+  const [productive, unscanned] = await Promise.all([
+    fetchDuePlaylists({ statuses: ["active", "error"], limit: productiveLimit }),
+    fetchDuePlaylists({ statuses: ["pending"], limit: backfillLimit, neverScanned: true })
+  ]);
+
+  const selected = [...productive, ...unscanned];
+  const selectedIds = new Set(selected.map((playlist) => playlist.id));
+  const remaining = limit - selected.length;
+  if (remaining <= 0) return selected;
+
+  // If either lane is empty, consume its spare capacity from the full queue.
+  const fallback = await fetchDuePlaylists({
+    statuses: ["pending", "active", "error"],
+    limit: remaining + selectedIds.size
+  });
+  for (const playlist of fallback) {
+    if (selected.length >= limit) break;
+    if (selectedIds.has(playlist.id)) continue;
+    selected.push(playlist);
+    selectedIds.add(playlist.id);
+  }
+  return selected;
 }
 
 async function getCandidateQueueSize() {
