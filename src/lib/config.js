@@ -14,7 +14,7 @@ const schema = z.object({
 
   MAX_ARTIST_UPDATES_PER_DAY: z.coerce.number().int().nonnegative().default(50000),
   MAX_PLAYLIST_SCANS_PER_DAY: z.coerce.number().int().nonnegative().default(800),
-  MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(160),
+  MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(40),
 
   MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(2500),
   MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(6),
@@ -24,7 +24,7 @@ const schema = z.object({
   MAX_PLAYLIST_ACTIVE_POOL: z.coerce.number().int().min(100).max(10000).default(2000),
   CANDIDATE_QUEUE_HIGH_WATERMARK: z.coerce.number().int().nonnegative().default(40000),
   BACKLOGGED_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(60),
-  PLAYLIST_BACKFILL_PERCENT: z.coerce.number().int().min(0).max(100).default(60),
+  PLAYLIST_BACKFILL_PERCENT: z.coerce.number().int().min(0).max(100).default(70),
 
   BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(10),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),

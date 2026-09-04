@@ -2,7 +2,7 @@ const { createClient } = require("@supabase/supabase-js");
 const config = require("./config");
 const { normalizeText } = require("./utils");
 const { shouldRetainArtist } = require("./threshold");
-const { splitPlaylistLimit } = require("./playlist-selection");
+const { splitPlaylistLimit, interleavePlaylistLanes } = require("./playlist-selection");
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -200,7 +200,7 @@ async function getDuePlaylists(limit) {
     fetchDuePlaylists({ statuses: ["pending"], limit: backfillLimit, neverScanned: true })
   ]);
 
-  const selected = [...productive, ...unscanned];
+  const selected = interleavePlaylistLanes(productive, unscanned);
   const selectedIds = new Set(selected.map((playlist) => playlist.id));
   const remaining = limit - selected.length;
   if (remaining <= 0) return selected;
