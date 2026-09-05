@@ -25,16 +25,35 @@ function assertArtistPage(page, artist) {
   }
 }
 
-async function readArtistPage(page, artist) {
+function isValidListenerCount(listeners) {
+  return listeners !== null && listeners >= 0 && listeners <= 1_000_000_000;
+}
+
+async function readArtistPageWhenReady(page, artist) {
   assertArtistPage(page, artist);
-  const listeners = await extractMonthlyListenersFromPage(page);
-  if (listeners === null || listeners < 0 || listeners > 1_000_000_000) {
-    throw new Error("monthly listeners not found or out of range");
-  }
-  return {
-    listeners,
-    canonicalName: await extractArtistName(page)
-  };
+
+  // Spotify often exposes the listener count well before the old fixed settle
+  // delay elapsed. Poll briefly and continue as soon as a trustworthy value is
+  // available; PAGE_SETTLE_MS is now a maximum readiness window, not a forced
+  // sleep on every artist.
+  const expiresAt = Date.now() + config.PAGE_SETTLE_MS;
+  let listeners = null;
+
+  do {
+    listeners = await extractMonthlyListenersFromPage(page);
+    if (isValidListenerCount(listeners)) {
+      return {
+        listeners,
+        canonicalName: await extractArtistName(page)
+      };
+    }
+
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) break;
+    await page.waitForTimeout(Math.min(300, remaining));
+  } while (true);
+
+  throw new Error("monthly listeners not found or out of range");
 }
 
 function needsAnomalyConfirmation(previous, current) {
@@ -56,14 +75,12 @@ async function collectOne(browser, artist, deadline, runToken) {
         waitUntil: "domcontentloaded",
         timeout: config.PAGE_TIMEOUT_MS
       });
-      await page.waitForTimeout(config.PAGE_SETTLE_MS);
 
-      const first = await readArtistPage(page, artist);
+      const first = await readArtistPageWhenReady(page, artist);
 
       if (needsAnomalyConfirmation(artist.monthly_listeners_latest, first.listeners)) {
         await page.reload({ waitUntil: "domcontentloaded", timeout: config.PAGE_TIMEOUT_MS });
-        await page.waitForTimeout(config.PAGE_SETTLE_MS);
-        const confirmation = await readArtistPage(page, artist);
+        const confirmation = await readArtistPageWhenReady(page, artist);
         const difference = Math.abs(confirmation.listeners - first.listeners);
         const tolerance = Math.max(
           10,
@@ -98,7 +115,8 @@ async function collectOne(browser, artist, deadline, runToken) {
     return { completed: 0, failures: 1 };
   } finally {
     await context.close();
-    await sleep(randomDelay(config.REQUEST_DELAY_MS, config.REQUEST_JITTER_MS));
+    const delay = randomDelay(config.REQUEST_DELAY_MS, config.REQUEST_JITTER_MS);
+    if (delay > 0) await sleep(delay);
   }
 }
 
