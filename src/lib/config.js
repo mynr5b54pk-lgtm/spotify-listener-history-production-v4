@@ -26,7 +26,7 @@ const schema = z.object({
   BACKLOGGED_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(60),
   PLAYLIST_BACKFILL_PERCENT: z.coerce.number().int().min(0).max(100).default(70),
 
-  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(10),
+  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(14),
   REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
   REQUEST_JITTER_MS: z.coerce.number().int().nonnegative().default(1200),
   PAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),

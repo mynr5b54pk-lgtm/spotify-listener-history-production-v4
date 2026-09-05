@@ -11,7 +11,7 @@ test("production-safe collection defaults remain balanced", () => {
   assert.equal(config.MIN_MONTHLY_LISTENERS, 10_000);
   assert.equal(config.ACTIVE_RECHECK_HOURS, 120);
   assert.equal(config.MAX_RUNTIME_MINUTES, 325);
-  assert.equal(config.BROWSER_CONCURRENCY, 10);
+  assert.equal(config.BROWSER_CONCURRENCY, 14);
   assert.equal(config.MAX_CANDIDATE_UPDATES_PER_RUN, 150);
   assert.equal(config.ARTIST_COLLECTION_MODE, "balanced");
   assert.equal(config.MAX_PLAYLIST_ACTIVE_POOL, 2_000);
