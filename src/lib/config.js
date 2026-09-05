@@ -16,7 +16,7 @@ const schema = z.object({
   MAX_PLAYLIST_SCANS_PER_DAY: z.coerce.number().int().nonnegative().default(800),
   MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(40),
 
-  MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(2500),
+  MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(5000),
   MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(6),
   MAX_DISCOVERY_QUERIES_PER_RUN: z.coerce.number().int().nonnegative().default(2),
   MAX_CANDIDATE_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(150),
@@ -26,11 +26,11 @@ const schema = z.object({
   BACKLOGGED_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(60),
   PLAYLIST_BACKFILL_PERCENT: z.coerce.number().int().min(0).max(100).default(70),
 
-  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(14),
-  REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(2200),
-  REQUEST_JITTER_MS: z.coerce.number().int().nonnegative().default(1200),
+  BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(16),
+  REQUEST_DELAY_MS: z.coerce.number().int().nonnegative().default(400),
+  REQUEST_JITTER_MS: z.coerce.number().int().nonnegative().default(400),
   PAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
-  PAGE_SETTLE_MS: z.coerce.number().int().nonnegative().default(4500),
+  PAGE_SETTLE_MS: z.coerce.number().int().nonnegative().default(5000),
   MAX_RETRIES: z.coerce.number().int().min(1).max(10).default(3),
   RETRY_BASE_DELAY_MS: z.coerce.number().int().positive().default(5000),
   MAX_RUNTIME_MINUTES: z.coerce.number().int().positive().default(325),
@@ -43,7 +43,7 @@ const schema = z.object({
   WORKER_HEARTBEAT_STALE_MINUTES: z.coerce.number().int().min(2).max(60).default(15),
 
   MIN_MONTHLY_LISTENERS: z.coerce.number().int().nonnegative().default(10000),
-  ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(120),
+  ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(48),
   PLAYLIST_RESCAN_DAYS: z.coerce.number().int().positive().default(7),
 
   WORKER_NAME: z.string().default("spotify-production-worker-v4"),
