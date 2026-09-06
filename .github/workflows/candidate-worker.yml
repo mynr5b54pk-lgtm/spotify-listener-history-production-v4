@@ -21,7 +21,7 @@ permissions:
 
 concurrency:
   group: spotify-candidate-worker-v4
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   verify:
