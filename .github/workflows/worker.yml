@@ -15,8 +15,6 @@ on:
       - 'src/lib/lifecycle.js'
       - 'sql/**'
   schedule:
-    # Queue an hourly run. With cancel-in-progress disabled, a pending run starts
-    # promptly after the current collector exits instead of leaving multi-hour gaps.
     - cron: '47 * * * *'
 
 permissions:
@@ -68,11 +66,11 @@ jobs:
           CANDIDATE_QUEUE_HIGH_WATERMARK: '40000'
           BACKLOGGED_PLAYLIST_SCANS_PER_RUN: '60'
           PLAYLIST_BACKFILL_PERCENT: '70'
-          BROWSER_CONCURRENCY: '16'
-          REQUEST_DELAY_MS: '400'
-          REQUEST_JITTER_MS: '400'
+          BROWSER_CONCURRENCY: '14'
+          REQUEST_DELAY_MS: '1000'
+          REQUEST_JITTER_MS: '600'
           PAGE_TIMEOUT_MS: '45000'
-          PAGE_SETTLE_MS: '5000'
+          PAGE_SETTLE_MS: '4500'
           MAX_RETRIES: '3'
           RETRY_BASE_DELAY_MS: '5000'
           MAX_RUNTIME_MINUTES: '325'
