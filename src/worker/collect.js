@@ -8,7 +8,11 @@ const {
 } = require("../lib/db");
 const { getPriorityRepairArtists } = require("../lib/repairs");
 const { extractMonthlyListenersFromPage, extractArtistName } = require("../lib/spotify");
-const { launchBrowser, newPage } = require("./browser");
+const {
+  launchBrowser,
+  createSharedContext,
+  newPageInContext
+} = require("./browser");
 const {
   mapLimit,
   withRetry,
@@ -29,17 +33,25 @@ function isValidListenerCount(listeners) {
   return listeners !== null && listeners >= 0 && listeners <= 1_000_000_000;
 }
 
-async function readArtistPageWhenReady(page, artist) {
+async function readArtistPageReliably(page, artist) {
   assertArtistPage(page, artist);
 
-  // Spotify often exposes the listener count well before the old fixed settle
-  // delay elapsed. Poll briefly and continue as soon as a trustworthy value is
-  // available; PAGE_SETTLE_MS is now a maximum readiness window, not a forced
-  // sleep on every artist.
-  const expiresAt = Date.now() + config.PAGE_SETTLE_MS;
-  let listeners = null;
+  // Spotify is a client-rendered app. The previous aggressive 5-second polling
+  // window caused large-scale false negatives. Restore the proven settle delay,
+  // then allow a short fallback window only when the value still is not present.
+  await page.waitForTimeout(config.PAGE_SETTLE_MS);
 
-  do {
+  let listeners = await extractMonthlyListenersFromPage(page);
+  if (isValidListenerCount(listeners)) {
+    return {
+      listeners,
+      canonicalName: await extractArtistName(page)
+    };
+  }
+
+  const fallbackUntil = Date.now() + Math.min(5000, config.PAGE_SETTLE_MS);
+  while (Date.now() < fallbackUntil) {
+    await page.waitForTimeout(500);
     listeners = await extractMonthlyListenersFromPage(page);
     if (isValidListenerCount(listeners)) {
       return {
@@ -47,11 +59,7 @@ async function readArtistPageWhenReady(page, artist) {
         canonicalName: await extractArtistName(page)
       };
     }
-
-    const remaining = expiresAt - Date.now();
-    if (remaining <= 0) break;
-    await page.waitForTimeout(Math.min(300, remaining));
-  } while (true);
+  }
 
   throw new Error("monthly listeners not found or out of range");
 }
@@ -64,10 +72,10 @@ function needsAnomalyConfirmation(previous, current) {
   return ratio >= config.ANOMALY_RECHECK_RATIO;
 }
 
-async function collectOne(browser, artist, deadline, runToken) {
+async function collectOne(context, artist, deadline, runToken) {
   if (isPastDeadline(deadline)) return { skipped: true };
 
-  const { context, page } = await newPage(browser);
+  const page = await newPageInContext(context);
 
   try {
     const result = await withRetry(async () => {
@@ -76,11 +84,11 @@ async function collectOne(browser, artist, deadline, runToken) {
         timeout: config.PAGE_TIMEOUT_MS
       });
 
-      const first = await readArtistPageWhenReady(page, artist);
+      const first = await readArtistPageReliably(page, artist);
 
       if (needsAnomalyConfirmation(artist.monthly_listeners_latest, first.listeners)) {
         await page.reload({ waitUntil: "domcontentloaded", timeout: config.PAGE_TIMEOUT_MS });
-        const confirmation = await readArtistPageWhenReady(page, artist);
+        const confirmation = await readArtistPageReliably(page, artist);
         const difference = Math.abs(confirmation.listeners - first.listeners);
         const tolerance = Math.max(
           10,
@@ -114,7 +122,7 @@ async function collectOne(browser, artist, deadline, runToken) {
     logger.error({ err: error, artist: artist.name }, "artist collection failed");
     return { completed: 0, failures: 1 };
   } finally {
-    await context.close();
+    await page.close().catch(() => {});
     const delay = randomDelay(config.REQUEST_DELAY_MS, config.REQUEST_JITTER_MS);
     if (delay > 0) await sleep(delay);
   }
@@ -135,6 +143,7 @@ async function collectArtists(limit, deadline, runToken, onProgress) {
   if (!artists.length) return { completed: 0, failures: 0 };
 
   const browser = await launchBrowser();
+  const context = await createSharedContext(browser);
 
   try {
     const progress = { completed: 0, failures: 0 };
@@ -142,7 +151,7 @@ async function collectArtists(limit, deadline, runToken, onProgress) {
       artists,
       config.BROWSER_CONCURRENCY,
       async (artist) => {
-        const result = await collectOne(browser, artist, deadline, runToken);
+        const result = await collectOne(context, artist, deadline, runToken);
         progress.completed += result?.completed || 0;
         progress.failures += result?.failures || 0;
         onProgress?.({ ...progress });
@@ -155,6 +164,7 @@ async function collectArtists(limit, deadline, runToken, onProgress) {
       failures: acc.failures + (item?.failures || 0)
     }), { completed: 0, failures: 0 });
   } finally {
+    await context.close().catch(() => {});
     await browser.close();
   }
 }
