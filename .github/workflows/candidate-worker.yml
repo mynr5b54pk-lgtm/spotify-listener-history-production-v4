@@ -14,14 +14,16 @@ on:
       - 'src/lib/lifecycle.js'
       - 'sql/**'
   schedule:
-    - cron: '27 * * * *'
+    - cron: '27 */3 * * *'
 
 permissions:
   contents: read
 
 concurrency:
   group: spotify-candidate-worker-v4
-  cancel-in-progress: true
+  # Candidate verification normally takes multiple hours. Do not let the next
+  # scheduled run cancel a healthy in-progress run and strand its DB heartbeat.
+  cancel-in-progress: false
 
 jobs:
   verify:
