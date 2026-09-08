@@ -75,7 +75,7 @@ jobs:
           ANOMALY_RECHECK_RATIO: '1.5'
           ANOMALY_CONFIRM_TOLERANCE_PERCENT: '1'
           MIN_MONTHLY_LISTENERS: '10000'
-          ACTIVE_RECHECK_HOURS: '48'
+          ACTIVE_RECHECK_HOURS: '168'
           PLAYLIST_RESCAN_DAYS: '7'
           WORKER_NAME: spotify-discovery-worker-v4
           LOCK_TTL_MINUTES: '10'

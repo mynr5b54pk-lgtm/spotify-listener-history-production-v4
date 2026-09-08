@@ -43,7 +43,7 @@ const schema = z.object({
   WORKER_HEARTBEAT_STALE_MINUTES: z.coerce.number().int().min(2).max(60).default(15),
 
   MIN_MONTHLY_LISTENERS: z.coerce.number().int().nonnegative().default(10000),
-  ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(48),
+  ACTIVE_RECHECK_HOURS: z.coerce.number().int().positive().default(168),
   PLAYLIST_RESCAN_DAYS: z.coerce.number().int().positive().default(7),
 
   WORKER_NAME: z.string().default("spotify-production-worker-v4"),

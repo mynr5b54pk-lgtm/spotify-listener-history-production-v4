@@ -5,7 +5,7 @@ Spotifyのアーティスト探索、プレイリスト巡回、月間リスナ�
 ## 現在の本番仕様
 
 - GitHub Actions: 毎時起動を予約し、同一Workerは直列実行
-- アクティブアーティスト: 実処理能力に合わせて原則120時間（5日）後に再取得対象へ戻し、全体を約5〜6日で一巡
+- アクティブアーティスト: 実処理能力に合わせて原則168時間（7日）後に再取得対象へ戻し、処理待ちを含めて全体を約7〜10.5日で一巡
 - 保存対象: 月間リスナー1万人以上のみ。1万人未満は履歴・アーティストとも保存しない
 - 履歴: 1アーティストにつきUTC日ごとに1点。1日に複数回成功した場合はその日の最新値へ更新
 - 収集分離: 既存1万人以上は325分Workerで直接アーティストページを更新し、新規探索は6時間ごとの専用Workerで処理
@@ -72,6 +72,12 @@ sql/019_search_edge_cases.sql
 sql/020_full_production_audit_fixes.sql
 sql/021_store_only_10000_plus.sql
 sql/022_playlist_priority_and_worker_split.sql
+sql/023_worker_split_and_monitoring.sql
+sql/024_correct_worker_run_labels.sql
+sql/025_harden_public_read_api.sql
+sql/026_require_fresh_current_value_for_rising_artists.sql
+sql/027_align_public_sitemap_threshold.sql
+sql/028_active_7_day_cadence.sql
 ```
 
 ## ローカル実行
