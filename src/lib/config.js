@@ -13,8 +13,8 @@ const schema = z.object({
   LOG_LEVEL: z.string().default("info"),
 
   MAX_ARTIST_UPDATES_PER_DAY: z.coerce.number().int().nonnegative().default(50000),
-  MAX_PLAYLIST_SCANS_PER_DAY: z.coerce.number().int().nonnegative().default(800),
-  MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(40),
+  MAX_PLAYLIST_SCANS_PER_DAY: z.coerce.number().int().nonnegative().default(400),
+  MAX_DISCOVERY_QUERIES_PER_DAY: z.coerce.number().int().nonnegative().default(20),
 
   MAX_ARTIST_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(5000),
   MAX_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(6),
@@ -22,8 +22,8 @@ const schema = z.object({
   MAX_CANDIDATE_UPDATES_PER_RUN: z.coerce.number().int().nonnegative().default(150),
   ARTIST_COLLECTION_MODE: z.enum(["balanced", "active_only", "candidates_only"]).default("balanced"),
   MAX_PLAYLIST_ACTIVE_POOL: z.coerce.number().int().min(100).max(10000).default(2000),
-  CANDIDATE_QUEUE_HIGH_WATERMARK: z.coerce.number().int().nonnegative().default(40000),
-  BACKLOGGED_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(60),
+  CANDIDATE_QUEUE_HIGH_WATERMARK: z.coerce.number().int().nonnegative().default(25000),
+  BACKLOGGED_PLAYLIST_SCANS_PER_RUN: z.coerce.number().int().nonnegative().default(30),
   PLAYLIST_BACKFILL_PERCENT: z.coerce.number().int().min(0).max(100).default(70),
 
   BROWSER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(14),
@@ -36,7 +36,7 @@ const schema = z.object({
   MAX_RUNTIME_MINUTES: z.coerce.number().int().positive().default(325),
   ANOMALY_RECHECK_RATIO: z.coerce.number().min(1.05).max(10).default(1.5),
   ANOMALY_CONFIRM_TOLERANCE_PERCENT: z.coerce.number().min(0.1).max(10).default(1),
-  WORKER_STALE_HOURS: z.coerce.number().min(1).max(24).default(4),
+  WORKER_STALE_HOURS: z.coerce.number().min(1).max(24).default(8),
   WORKER_RESTART_DELAY_MINUTES: z.coerce.number().int().min(5).max(120).default(15),
   WORKER_STALE_RUN_MINUTES: z.coerce.number().int().min(15).max(720).default(20),
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(10000).default(60000),

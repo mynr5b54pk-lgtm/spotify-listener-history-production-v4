@@ -12,14 +12,14 @@ on:
       - 'src/lib/config.js'
       - 'sql/**'
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17 */3 * * *'
 
 permissions:
   contents: read
 
 concurrency:
   group: spotify-worker-watchdog
-  # Keep a long-running fallback alive when the next hourly watchdog starts.
+  # Keep a long-running fallback alive when the next scheduled watchdog starts.
   cancel-in-progress: false
 
 jobs:
@@ -49,7 +49,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-          WORKER_STALE_HOURS: '4'
+          WORKER_STALE_HOURS: '8'
           WORKER_RESTART_DELAY_MINUTES: '15'
           WORKER_STALE_RUN_MINUTES: '20'
           WORKER_HEARTBEAT_STALE_MINUTES: '15'
@@ -69,16 +69,16 @@ jobs:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           HEADLESS: 'true'
           MAX_ARTIST_UPDATES_PER_DAY: '50000'
-          MAX_PLAYLIST_SCANS_PER_DAY: '800'
-          MAX_DISCOVERY_QUERIES_PER_DAY: '40'
+          MAX_PLAYLIST_SCANS_PER_DAY: '400'
+          MAX_DISCOVERY_QUERIES_PER_DAY: '20'
           MAX_ARTIST_UPDATES_PER_RUN: '5000'
           MAX_PLAYLIST_SCANS_PER_RUN: '0'
           MAX_DISCOVERY_QUERIES_PER_RUN: '0'
           MAX_CANDIDATE_UPDATES_PER_RUN: '0'
           ARTIST_COLLECTION_MODE: active_only
           MAX_PLAYLIST_ACTIVE_POOL: '2000'
-          CANDIDATE_QUEUE_HIGH_WATERMARK: '40000'
-          BACKLOGGED_PLAYLIST_SCANS_PER_RUN: '60'
+          CANDIDATE_QUEUE_HIGH_WATERMARK: '25000'
+          BACKLOGGED_PLAYLIST_SCANS_PER_RUN: '30'
           PLAYLIST_BACKFILL_PERCENT: '70'
           BROWSER_CONCURRENCY: '14'
           REQUEST_DELAY_MS: '1000'

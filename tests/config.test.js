@@ -19,9 +19,11 @@ test("production-safe collection defaults remain balanced", () => {
   assert.equal(config.MAX_CANDIDATE_UPDATES_PER_RUN, 150);
   assert.equal(config.ARTIST_COLLECTION_MODE, "balanced");
   assert.equal(config.MAX_PLAYLIST_ACTIVE_POOL, 2_000);
-  assert.equal(config.CANDIDATE_QUEUE_HIGH_WATERMARK, 40_000);
-  assert.equal(config.MAX_DISCOVERY_QUERIES_PER_DAY, 40);
-  assert.equal(config.BACKLOGGED_PLAYLIST_SCANS_PER_RUN, 60);
+  assert.equal(config.CANDIDATE_QUEUE_HIGH_WATERMARK, 25_000);
+  assert.equal(config.MAX_DISCOVERY_QUERIES_PER_DAY, 20);
+  assert.equal(config.BACKLOGGED_PLAYLIST_SCANS_PER_RUN, 30);
   assert.equal(config.PLAYLIST_BACKFILL_PERCENT, 70);
+  assert.equal(config.MAX_PLAYLIST_SCANS_PER_DAY, 400);
+  assert.equal(config.WORKER_STALE_HOURS, 8);
   assert.ok(config.MAX_CANDIDATE_UPDATES_PER_RUN < config.MAX_ARTIST_UPDATES_PER_RUN);
 });
