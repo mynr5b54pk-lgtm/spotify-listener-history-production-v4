@@ -272,6 +272,23 @@ async function upsertArtist(item) {
   return { ...artist, isNew: !existing };
 }
 
+async function getExcludedSpotifyIds(spotifyIds) {
+  const ids = [...new Set(spotifyIds.filter(Boolean))];
+  if (!ids.length) return new Set();
+  const excluded = new Set();
+  for (let offset = 0; offset < ids.length; offset += POSTGREST_PAGE_SIZE) {
+    const batch = ids.slice(offset, offset + POSTGREST_PAGE_SIZE);
+    const { data, error } = await supabase
+      .from("excluded_spotify_artists")
+      .select("spotify_id")
+      .in("spotify_id", batch);
+    for (const row of ensure(data, error, "get excluded artists") || []) {
+      excluded.add(row.spotify_id);
+    }
+  }
+  return excluded;
+}
+
 async function linkPlaylistArtist(playlistId, artistId) {
   const { error } = await supabase
     .from("playlist_artists")
@@ -379,6 +396,37 @@ async function deleteArtist(artistId) {
   ensure(null, error, "delete below-threshold artist");
 }
 
+async function excludeBelowThresholdArtist(artist) {
+  const spotifyId = artist.spotify_id || artist.spotify_url?.match(/\/artist\/([A-Za-z0-9]+)/)?.[1];
+  if (!spotifyId) throw new Error(`cannot exclude artist ${artist.id}: spotify id missing`);
+
+  const { error: exclusionError } = await supabase
+    .from("excluded_spotify_artists")
+    .upsert({ spotify_id: spotifyId }, { onConflict: "spotify_id" });
+  ensure(null, exclusionError, "exclude below-threshold artist");
+
+  // Preserve the complete history of artists that were previously public.
+  // Never-successful candidates have no useful listener history, so retain
+  // only their Spotify ID in the exclusion table as requested.
+  if (artist.discovery_status === "active" || artist.last_collected_at) {
+    const { error } = await supabase
+      .from("artists")
+      .update({
+        tracking_enabled: false,
+        discovery_status: "paused",
+        next_collect_at: "9999-12-31T00:00:00.000Z",
+        failure_count: 0,
+        last_error: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", artist.id);
+    ensure(null, error, "pause below-threshold historical artist");
+    return;
+  }
+
+  await deleteArtist(artist.id);
+}
+
 async function saveDailyHistory(artistId, listeners, now) {
   const { error: insertError } = await supabase
     .from("monthly_listener_history")
@@ -405,7 +453,7 @@ async function saveDailyHistory(artistId, listeners, now) {
 async function saveArtistSuccess(artist, listeners, canonicalName = null) {
   const now = new Date();
   if (!shouldRetainArtist(listeners, config.MIN_MONTHLY_LISTENERS)) {
-    await deleteArtist(artist.id);
+    await excludeBelowThresholdArtist(artist);
     return { retained: false };
   }
 
@@ -529,6 +577,7 @@ module.exports = {
   getDuePlaylists,
   getCandidateQueueSize,
   upsertArtist,
+  getExcludedSpotifyIds,
   linkPlaylistArtist,
   savePlaylistSuccess,
   savePlaylistFailure,

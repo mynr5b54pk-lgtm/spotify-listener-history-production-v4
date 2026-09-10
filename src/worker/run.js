@@ -98,7 +98,7 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
       usage.discoveryCompleted = discovery.completed;
       stats.discoveryQueriesCompleted = discovery.completed;
       stats.discoveredPlaylists = discovery.discoveredPlaylists;
-      stats.failedJobs += discovery.failures;
+      stats.failedJobs = failuresBeforeDiscovery + discovery.failures;
     }
 
     if (!isPastDeadline(deadline)) {
@@ -120,7 +120,7 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
       usage.playlistCompleted = scan.completed;
       stats.playlistScansCompleted = scan.completed;
       stats.discoveredArtists = scan.discoveredArtists;
-      stats.failedJobs += scan.failures;
+      stats.failedJobs = failuresBeforeScan + scan.failures;
     }
 
     if (!isPastDeadline(deadline)) {
@@ -132,7 +132,7 @@ const { uuid, deadlineFromMinutes, isPastDeadline } = require("../lib/utils");
       usage.artistAttempted = collect.completed + collect.failures;
       usage.artistCompleted = collect.completed;
       stats.artistUpdatesCompleted = collect.completed;
-      stats.failedJobs += collect.failures;
+      stats.failedJobs = failuresBeforeCollect + collect.failures;
     } else {
       stats.notes = "runtime budget exhausted before artist collection";
     }

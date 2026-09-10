@@ -3,6 +3,7 @@ const logger = require("../lib/logger");
 const {
   getDuePlaylists,
   upsertArtist,
+  getExcludedSpotifyIds,
   linkPlaylistArtist,
   savePlaylistSuccess,
   savePlaylistFailure,
@@ -45,8 +46,10 @@ async function scanOne(browser, playlist, deadline, runToken) {
       label: `playlist:${playlist.spotify_id}`
     });
 
+    const excludedIds = await getExcludedSpotifyIds(artists.map(item => item.spotifyId));
     let newCandidates = 0;
     for (const item of artists) {
+      if (excludedIds.has(item.spotifyId)) continue;
       const artist = await upsertArtist(item);
       if (artist.isNew) newCandidates += 1;
       await linkPlaylistArtist(playlist.id, artist.id);
