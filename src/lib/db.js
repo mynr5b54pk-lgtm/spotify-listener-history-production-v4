@@ -3,6 +3,7 @@ const config = require("./config");
 const { normalizeText } = require("./utils");
 const { shouldRetainArtist } = require("./threshold");
 const { splitPlaylistLimit, interleavePlaylistLanes } = require("./playlist-selection");
+const { retryTransientOperation } = require("./database-retry");
 
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -28,9 +29,9 @@ function isUsableAlias(value) {
 async function saveArtistAlias(artistId, alias) {
   const normalized = normalizeText(alias);
   if (!artistId || !isUsableAlias(normalized)) return;
-  const { error } = await supabase
+  const { error } = await retryTransientOperation(() => supabase
     .from("site_artist_aliases")
-    .upsert({ artist_id: artistId, alias: normalized }, { onConflict: "artist_id,alias", ignoreDuplicates: true });
+    .upsert({ artist_id: artistId, alias: normalized }, { onConflict: "artist_id,alias", ignoreDuplicates: true }));
   if (error && error.code !== "23505") console.warn(`save artist alias failed: ${error.message}`);
 }
 
@@ -68,7 +69,7 @@ async function createRun(runToken, quota) {
 }
 
 async function updateRunProgress(runId, runToken, stats, startedAtMs) {
-  const { error } = await supabase
+  const { error } = await retryTransientOperation(() => supabase
     .from("worker_runs")
     .update({
       artist_updates_completed: stats.artistUpdatesCompleted,
@@ -81,12 +82,12 @@ async function updateRunProgress(runId, runToken, stats, startedAtMs) {
     })
     .eq("id", runId)
     .eq("run_token", runToken)
-    .eq("status", "running");
+    .eq("status", "running"));
   ensure(null, error, "update run progress");
 }
 
 async function finishRun(runId, stats, status, quotaFinalized = false) {
-  const { error } = await supabase
+  const { error } = await retryTransientOperation(() => supabase
     .from("worker_runs")
     .update({
       status,
@@ -101,12 +102,15 @@ async function finishRun(runId, stats, status, quotaFinalized = false) {
       notes: stats.notes || null,
       quota_finalized: quotaFinalized
     })
-    .eq("id", runId);
+    .eq("id", runId));
   ensure(null, error, "finish run");
 }
 
 async function logJobError(item) {
-  const { error } = await supabase.from("job_errors").insert(item);
+  const { error } = await retryTransientOperation(
+    () => supabase.from("job_errors").insert(item),
+    { attempts: 2 }
+  );
   if (error) console.error(`job error logging failed: ${error.message}`);
 }
 
@@ -392,7 +396,9 @@ async function getDueArtists(limit) {
 }
 
 async function deleteArtist(artistId) {
-  const { error } = await supabase.from("artists").delete().eq("id", artistId);
+  const { error } = await retryTransientOperation(
+    () => supabase.from("artists").delete().eq("id", artistId)
+  );
   ensure(null, error, "delete below-threshold artist");
 }
 
@@ -400,16 +406,16 @@ async function excludeBelowThresholdArtist(artist) {
   const spotifyId = artist.spotify_id || artist.spotify_url?.match(/\/artist\/([A-Za-z0-9]+)/)?.[1];
   if (!spotifyId) throw new Error(`cannot exclude artist ${artist.id}: spotify id missing`);
 
-  const { error: exclusionError } = await supabase
+  const { error: exclusionError } = await retryTransientOperation(() => supabase
     .from("excluded_spotify_artists")
-    .upsert({ spotify_id: spotifyId }, { onConflict: "spotify_id" });
+    .upsert({ spotify_id: spotifyId }, { onConflict: "spotify_id" }));
   ensure(null, exclusionError, "exclude below-threshold artist");
 
   // Preserve the complete history of artists that were previously public.
   // Never-successful candidates have no useful listener history, so retain
   // only their Spotify ID in the exclusion table as requested.
   if (artist.discovery_status === "active" || artist.last_collected_at) {
-    const { error } = await supabase
+    const { error } = await retryTransientOperation(() => supabase
       .from("artists")
       .update({
         tracking_enabled: false,
@@ -419,7 +425,7 @@ async function excludeBelowThresholdArtist(artist) {
         last_error: null,
         updated_at: new Date().toISOString()
       })
-      .eq("id", artist.id);
+      .eq("id", artist.id));
     ensure(null, error, "pause below-threshold historical artist");
     return;
   }
@@ -428,9 +434,9 @@ async function excludeBelowThresholdArtist(artist) {
 }
 
 async function saveDailyHistory(artistId, listeners, now) {
-  const { error: insertError } = await supabase
+  const { error: insertError } = await retryTransientOperation(() => supabase
     .from("monthly_listener_history")
-    .insert({ artist_id: artistId, monthly_listeners: listeners, collected_at: now.toISOString() });
+    .insert({ artist_id: artistId, monthly_listeners: listeners, collected_at: now.toISOString() }));
 
   if (!insertError) return;
   if (insertError.code !== "23505") throw new Error(`insert listener history: ${insertError.message}`);
@@ -441,12 +447,12 @@ async function saveDailyHistory(artistId, listeners, now) {
   const dayEnd = new Date(dayStart);
   dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await retryTransientOperation(() => supabase
     .from("monthly_listener_history")
     .update({ monthly_listeners: listeners, collected_at: now.toISOString() })
     .eq("artist_id", artistId)
     .gte("collected_at", dayStart.toISOString())
-    .lt("collected_at", dayEnd.toISOString());
+    .lt("collected_at", dayEnd.toISOString()));
   ensure(null, updateError, "update daily listener history");
 }
 
@@ -466,7 +472,7 @@ async function saveArtistSuccess(artist, listeners, canonicalName = null) {
   const shouldRename = normalizedCanonicalName && normalizedCanonicalName !== normalizeText(artist.name);
   if (shouldRename) await saveArtistAlias(artist.id, artist.name);
 
-  const { error } = await supabase
+  const { error } = await retryTransientOperation(() => supabase
     .from("artists")
     .update({
       ...(shouldRename ? { name: normalizedCanonicalName } : {}),
@@ -478,7 +484,7 @@ async function saveArtistSuccess(artist, listeners, canonicalName = null) {
       last_error: null,
       updated_at: now.toISOString()
     })
-    .eq("id", artist.id);
+    .eq("id", artist.id));
   ensure(null, error, "save artist success");
   return { retained: true };
 }
@@ -495,7 +501,7 @@ async function saveArtistFailure(artist, message) {
     ? "active"
     : "error";
 
-  const { error } = await supabase
+  const { error } = await retryTransientOperation(() => supabase
     .from("artists")
     .update({
       tracking_enabled: true,
@@ -505,7 +511,7 @@ async function saveArtistFailure(artist, message) {
       next_collect_at: next.toISOString(),
       updated_at: new Date().toISOString()
     })
-    .eq("id", artist.id);
+    .eq("id", artist.id));
   ensure(null, error, "save artist failure");
 }
 

@@ -111,14 +111,22 @@ async function collectOne(context, artist, deadline, runToken) {
     logger.info({ artist: result.canonicalName || artist.name, listeners: result.listeners }, "artist collection complete");
     return { completed: 1, failures: 0 };
   } catch (error) {
-    await saveArtistFailure(artist, error.message);
-    await logJobError({
-      run_token: runToken,
-      job_type: "artist",
-      entity_id: artist.id,
-      entity_key: artist.spotify_id || artist.spotify_url,
-      error_message: error.message
-    });
+    try {
+      await saveArtistFailure(artist, error.message);
+    } catch (persistenceError) {
+      logger.error({ err: persistenceError, artist: artist.name }, "artist failure state could not be saved");
+    }
+    try {
+      await logJobError({
+        run_token: runToken,
+        job_type: "artist",
+        entity_id: artist.id,
+        entity_key: artist.spotify_id || artist.spotify_url,
+        error_message: error.message
+      });
+    } catch (loggingError) {
+      logger.error({ err: loggingError, artist: artist.name }, "artist failure log could not be saved");
+    }
     logger.error({ err: error, artist: artist.name }, "artist collection failed");
     return { completed: 0, failures: 1 };
   } finally {
