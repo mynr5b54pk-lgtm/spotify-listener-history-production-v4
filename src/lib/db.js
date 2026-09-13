@@ -433,29 +433,6 @@ async function excludeBelowThresholdArtist(artist) {
   await deleteArtist(artist.id);
 }
 
-async function saveDailyHistory(artistId, listeners, now) {
-  const { error: insertError } = await retryTransientOperation(() => supabase
-    .from("monthly_listener_history")
-    .insert({ artist_id: artistId, monthly_listeners: listeners, collected_at: now.toISOString() }));
-
-  if (!insertError) return;
-  if (insertError.code !== "23505") throw new Error(`insert listener history: ${insertError.message}`);
-
-  // A manual rerun or retry can collect an artist more than once in one UTC day.
-  // Keep one point/day, but make that point the latest successful observation.
-  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const dayEnd = new Date(dayStart);
-  dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
-
-  const { error: updateError } = await retryTransientOperation(() => supabase
-    .from("monthly_listener_history")
-    .update({ monthly_listeners: listeners, collected_at: now.toISOString() })
-    .eq("artist_id", artistId)
-    .gte("collected_at", dayStart.toISOString())
-    .lt("collected_at", dayEnd.toISOString()));
-  ensure(null, updateError, "update daily listener history");
-}
-
 async function saveArtistSuccess(artist, listeners, canonicalName = null) {
   const now = new Date();
   if (!shouldRetainArtist(listeners, config.MIN_MONTHLY_LISTENERS)) {
@@ -466,26 +443,21 @@ async function saveArtistSuccess(artist, listeners, canonicalName = null) {
   const next = new Date(now);
   next.setUTCHours(next.getUTCHours() + config.ACTIVE_RECHECK_HOURS);
 
-  await saveDailyHistory(artist.id, listeners, now);
-
   const normalizedCanonicalName = normalizeText(canonicalName);
   const shouldRename = normalizedCanonicalName && normalizedCanonicalName !== normalizeText(artist.name);
   if (shouldRename) await saveArtistAlias(artist.id, artist.name);
 
-  const { error } = await retryTransientOperation(() => supabase
-    .from("artists")
-    .update({
-      ...(shouldRename ? { name: normalizedCanonicalName } : {}),
-      monthly_listeners_latest: listeners,
-      last_collected_at: now.toISOString(),
-      next_collect_at: next.toISOString(),
-      discovery_status: "active",
-      failure_count: 0,
-      last_error: null,
-      updated_at: now.toISOString()
-    })
-    .eq("id", artist.id));
-  ensure(null, error, "save artist success");
+  // Keep the daily history point and the artist's current value in one
+  // transaction. Retrying the RPC is safe because it replaces the same UTC
+  // day's point rather than creating another one.
+  const { error } = await retryTransientOperation(() => supabase.rpc("save_artist_observation", {
+    p_artist_id: artist.id,
+    p_monthly_listeners: listeners,
+    p_collected_at: now.toISOString(),
+    p_next_collect_at: next.toISOString(),
+    p_canonical_name: shouldRename ? normalizedCanonicalName : null
+  }));
+  ensure(null, error, "save artist observation");
   return { retained: true };
 }
 
